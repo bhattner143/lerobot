@@ -32,11 +32,16 @@ from lerobot.configs.types import FeatureType, NormalizationMode, PolicyFeature
 # Generic variable that is either PreTrainedConfig or a subclass thereof
 T = TypeVar("T", bound="PreTrainedConfig")
 
-
+# draccus.ChoiceRegistry allows dynamic registration and instantiation of subclasses based on a string key. 
+# It is particularly useful for managing configurations where different types of objects 
+# (e.g., policies, models, optimizers) need to be dynamically selected and instantiated 
+# at runtime based on user input, such as command-line arguments or configuration files.
 @dataclass
 class PreTrainedConfig(draccus.ChoiceRegistry, HubMixin, abc.ABC):
     """
-    Base configuration class for policy models.
+    This is the base class for all policy configurations. 
+    It defines the common structure and behavior for policy configurations, 
+    such as handling input/output features, normalization, and device settings.
 
     Args:
         n_obs_steps: Number of environment steps worth of observations to pass to the policy (takes the

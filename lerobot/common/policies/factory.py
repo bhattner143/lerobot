@@ -20,12 +20,13 @@ from torch import nn
 
 from lerobot.common.datasets.lerobot_dataset import LeRobotDatasetMetadata
 from lerobot.common.datasets.utils import dataset_to_policy_features
-from lerobot.common.envs.configs import EnvConfig
-from lerobot.common.envs.utils import env_to_policy_features
+# from lerobot.common.envs.configs import EnvConfig
+# from lerobot.common.envs.utils import env_to_policy_features
 from lerobot.common.policies.act.configuration_act import ACTConfig
 from lerobot.common.policies.diffusion.configuration_diffusion import DiffusionConfig
 from lerobot.common.policies.pi0.configuration_pi0 import PI0Config
 from lerobot.common.policies.pi0fast.configuration_pi0fast import PI0FASTConfig
+from lerobot.common.policies.act_advanced.configuration_act_advanced import ACTConfigAdvanced #My addition
 from lerobot.common.policies.pretrained import PreTrainedPolicy
 from lerobot.common.policies.tdmpc.configuration_tdmpc import TDMPCConfig
 from lerobot.common.policies.vqbet.configuration_vqbet import VQBeTConfig
@@ -59,6 +60,12 @@ def get_policy_class(name: str) -> PreTrainedPolicy:
         from lerobot.common.policies.pi0fast.modeling_pi0fast import PI0FASTPolicy
 
         return PI0FASTPolicy
+    
+    elif name == "act_advanced":
+        from lerobot.common.policies.act_advanced.modeling_act_advanced import ACTPolicyAdvanced
+
+        return ACTPolicyAdvanced
+    
     else:
         raise NotImplementedError(f"Policy with name {name} is not implemented.")
 
@@ -76,14 +83,16 @@ def make_policy_config(policy_type: str, **kwargs) -> PreTrainedConfig:
         return PI0Config(**kwargs)
     elif policy_type == "pi0fast":
         return PI0FASTConfig(**kwargs)
+    # elif policy_type == "act_advanced":
+    #     return ACTConfigAdvanced(**kwargs)
     else:
         raise ValueError(f"Policy type '{policy_type}' is not available.")
 
 
 def make_policy(
-    cfg: PreTrainedConfig,
-    ds_meta: LeRobotDatasetMetadata | None = None,
-    env_cfg: EnvConfig | None = None,
+    cfg: PreTrainedConfig,  # Configuration object for the policy
+    ds_meta: LeRobotDatasetMetadata | None = None,  # Optional dataset metadata
+    # env_cfg: EnvConfig | None = None,  # Optional environment configuration
 ) -> PreTrainedPolicy:
     """Make an instance of a policy class.
 
@@ -95,9 +104,6 @@ def make_policy(
             be loaded with the weights from that path.
         ds_meta (LeRobotDatasetMetadata | None, optional): Dataset metadata to take input/output shapes and
             statistics to use for (un)normalization of inputs/outputs in the policy. Defaults to None.
-        env_cfg (EnvConfig | None, optional): The config of a gym environment to parse features from. Must be
-            provided if ds_meta is not. Defaults to None.
-
     Raises:
         ValueError: Either ds_meta or env and env_cfg must be provided.
         NotImplementedError: if the policy.type is 'vqbet' and the policy device 'mps' (due to an incompatibility)
@@ -105,53 +111,51 @@ def make_policy(
     Returns:
         PreTrainedPolicy: _description_
     """
-    if bool(ds_meta) == bool(env_cfg):
-        raise ValueError("Either one of a dataset metadata or a sim env must be provided.")
+    # if bool(ds_meta) == bool(env_cfg):
+    #     raise ValueError("Either one of a dataset metadata or a sim env must be provided.")
 
-    # NOTE: Currently, if you try to run vqbet with mps backend, you'll get this error.
-    # TODO(aliberts, rcadene): Implement a check_backend_compatibility in policies?
-    # NotImplementedError: The operator 'aten::unique_dim' is not currently implemented for the MPS device. If
-    # you want this op to be added in priority during the prototype phase of this feature, please comment on
-    # https://github.com/pytorch/pytorch/issues/77764. As a temporary fix, you can set the environment
-    # variable `PYTORCH_ENABLE_MPS_FALLBACK=1` to use the CPU as a fallback for this op. WARNING: this will be
-    # slower than running natively on MPS.
-    if cfg.type == "vqbet" and cfg.device == "mps":
-        raise NotImplementedError(
-            "Current implementation of VQBeT does not support `mps` backend. "
-            "Please use `cpu` or `cuda` backend."
-        )
-
+    # Retrieve the policy class based on the type specified in the configuration
     policy_cls = get_policy_class(cfg.type)
 
+    # Initialize a dictionary to hold additional arguments for policy instantiation
     kwargs = {}
+
     if ds_meta is not None:
+        # If dataset metadata is provided, extract features from the dataset
         features = dataset_to_policy_features(ds_meta.features)
+        # Add dataset statistics to the arguments for policy instantiation
         kwargs["dataset_stats"] = ds_meta.stats
     else:
+        # If no dataset metadata is provided, ensure a pretrained path is not required
         if not cfg.pretrained_path:
             logging.warning(
                 "You are instantiating a policy from scratch and its features are parsed from an environment "
                 "rather than a dataset. Normalization modules inside the policy will have infinite values "
                 "by default without stats from a dataset."
             )
-        features = env_to_policy_features(env_cfg)
 
+    # Separate features into input and output features based on their type
     cfg.output_features = {key: ft for key, ft in features.items() if ft.type is FeatureType.ACTION}
     cfg.input_features = {key: ft for key, ft in features.items() if key not in cfg.output_features}
+    # Add the configuration to the arguments for policy instantiation
     kwargs["config"] = cfg
 
     if cfg.pretrained_path:
-        # Load a pretrained policy and override the config if needed (for example, if there are inference-time
-        # hyperparameters that we want to vary).
+        # If a pretrained path is specified, load the pretrained policy
+        # and override the configuration if necessary (e.g., for inference-time hyperparameters)
         kwargs["pretrained_name_or_path"] = cfg.pretrained_path
         policy = policy_cls.from_pretrained(**kwargs)
     else:
-        # Make a fresh policy.
+        # If no pretrained path is specified, create a new policy instance
         policy = policy_cls(**kwargs)
 
+    # Move the policy to the specified device (e.g., CPU, GPU)
     policy.to(cfg.device)
+    # Ensure the policy is an instance of PyTorch's nn.Module
     assert isinstance(policy, nn.Module)
 
+    # Optionally, compile the policy for performance optimization (commented out for now)
     # policy = torch.compile(policy, mode="reduce-overhead")
 
+    # Return the instantiated policy
     return policy

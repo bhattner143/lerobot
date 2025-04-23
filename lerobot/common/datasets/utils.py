@@ -398,28 +398,55 @@ def get_features_from_robot(robot: Robot, use_videos: bool = True) -> dict:
 
 
 def dataset_to_policy_features(features: dict[str, dict]) -> dict[str, PolicyFeature]:
-    # TODO(aliberts): Implement "type" in dataset features and simplify this
+    """
+    Converts dataset features into policy features for use in a policy model.
+
+    Args:
+        features (dict[str, dict]): A dictionary where keys are feature names and values are dictionaries
+            containing metadata about the feature (e.g., dtype, shape, names).
+
+    Returns:
+        dict[str, PolicyFeature]: A dictionary where keys are feature names and values are PolicyFeature objects.
+
+    Raises:
+        ValueError: If the shape of a visual feature (image or video) does not have exactly 3 dimensions.
+    """
     policy_features = {}
+
     for key, ft in features.items():
         shape = ft["shape"]
+
+        # Handle visual features (image or video)
         if ft["dtype"] in ["image", "video"]:
             type = FeatureType.VISUAL
+
+            # Ensure visual features have 3 dimensions
             if len(shape) != 3:
                 raise ValueError(f"Number of dimensions of {key} != 3 (shape={shape})")
 
             names = ft["names"]
-            # Backward compatibility for "channel" which is an error introduced in LeRobotDataset v2.0 for ported datasets.
+
+            # Handle backward compatibility for "channel" naming issue in older dataset versions
             if names[2] in ["channel", "channels"]:  # (h, w, c) -> (c, h, w)
                 shape = (shape[2], shape[0], shape[1])
+
+        # Handle environment state features
         elif key == "observation.environment_state":
             type = FeatureType.ENV
+
+        # Handle state observation features
         elif key.startswith("observation"):
             type = FeatureType.STATE
+
+        # Handle action features
         elif key == "action":
             type = FeatureType.ACTION
+
+        # Skip features that do not match any of the above categories
         else:
             continue
 
+        # Add the feature to the policy features dictionary
         policy_features[key] = PolicyFeature(
             type=type,
             shape=shape,

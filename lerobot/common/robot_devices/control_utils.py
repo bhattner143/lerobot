@@ -223,65 +223,92 @@ def control_loop(
     single_task: str | None = None,
 ):
     # TODO(rcadene): Add option to record logs
+    # This function manages the main control loop for the robot. It handles teleoperation,
+    # policy-based control, data recording, and optional display of data. The loop runs
+    # for a specified duration or until an early exit event is triggered.
+
+    # Ensure the robot is connected before starting the control loop
     if not robot.is_connected:
         robot.connect()
 
+    # Initialize events dictionary if not provided
     if events is None:
         events = {"exit_early": False}
 
+    # If no control time is specified, run the loop indefinitely
     if control_time_s is None:
         control_time_s = float("inf")
 
+    # Validate that teleoperation and policy-based control are not used simultaneously
     if teleoperate and policy is not None:
         raise ValueError("When `teleoperate` is True, `policy` should be None.")
 
+    # Ensure that a task is provided when recording data to a dataset
     if dataset is not None and single_task is None:
         raise ValueError("You need to provide a task as argument in `single_task`.")
 
+    # Validate that the dataset's FPS matches the requested FPS
     if dataset is not None and fps is not None and dataset.fps != fps:
         raise ValueError(f"The dataset fps should be equal to requested fps ({dataset['fps']} != {fps}).")
 
+    # Initialize the timestamp and start time for the episode
     timestamp = 0
     start_episode_t = time.perf_counter()
+
+    # Main control loop
     while timestamp < control_time_s:
         start_loop_t = time.perf_counter()
 
+        # Handle teleoperation or policy-based control
         if teleoperate:
+            # In teleoperation mode, the user provides the action, and the robot records the data
             observation, action = robot.teleop_step(record_data=True)
         else:
+            # Capture the current observation from the robot
             observation = robot.capture_observation()
 
             if policy is not None:
+                # Predict the next action using the provided policy
                 pred_action = predict_action(
                     observation, policy, get_safe_torch_device(policy.config.device), policy.config.use_amp
                 )
-                # Action can eventually be clipped using `max_relative_target`,
-                # so action actually sent is saved in the dataset.
+                # Send the predicted action to the robot and record the actual action taken
                 action = robot.send_action(pred_action)
                 action = {"action": action}
 
+        # Record the observation and action in the dataset if provided
         if dataset is not None:
             frame = {**observation, **action, "task": single_task}
             dataset.add_frame(frame)
 
-        # TODO(Steven): This should be more general (for RemoteRobot instead of checking the name, but anyways it will change soon)
+        # Display data if enabled and the environment is not headless
+        # Special handling for specific robot types (e.g., "lekiwi")
         if (display_data and not is_headless()) or (display_data and robot.robot_type.startswith("lekiwi")):
+            # Log the actions sent to the robot
             for k, v in action.items():
                 for i, vv in enumerate(v):
                     rr.log(f"sent_{k}_{i}", rr.Scalar(vv.numpy()))
 
+            # Log images from the observation
             image_keys = [key for key in observation if "image" in key]
             for key in image_keys:
                 rr.log(key, rr.Image(observation[key].numpy()), static=True)
 
+        # Enforce the desired FPS by busy-waiting if necessary
         if fps is not None:
             dt_s = time.perf_counter() - start_loop_t
             busy_wait(1 / fps - dt_s)
 
+        # Calculate the time taken for the current loop iteration
         dt_s = time.perf_counter() - start_loop_t
+
+        # Log control information, including timing and frequency
         log_control_info(robot, dt_s, fps=fps)
 
+        # Update the timestamp for the current episode
         timestamp = time.perf_counter() - start_episode_t
+
+        # Check for early exit events and break the loop if triggered
         if events["exit_early"]:
             events["exit_early"] = False
             break

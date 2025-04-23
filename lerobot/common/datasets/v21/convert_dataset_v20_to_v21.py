@@ -55,11 +55,11 @@ class SuppressWarnings:
 
 def convert_dataset(
     repo_id: str,
-    branch: str | None = None,
+    root: str | None = None,
     num_workers: int = 4,
 ):
     with SuppressWarnings():
-        dataset = LeRobotDataset(repo_id, revision=V20, force_cache_sync=True)
+        dataset = LeRobotDataset(repo_id,  root = root, revision=V20, force_cache_sync=True)
 
     if (dataset.root / EPISODES_STATS_PATH).is_file():
         (dataset.root / EPISODES_STATS_PATH).unlink()
@@ -71,23 +71,6 @@ def convert_dataset(
     dataset.meta.info["codebase_version"] = CODEBASE_VERSION
     write_info(dataset.meta.info, dataset.root)
 
-    dataset.push_to_hub(branch=branch, tag_version=False, allow_patterns="meta/")
-
-    # delete old stats.json file
-    if (dataset.root / STATS_PATH).is_file:
-        (dataset.root / STATS_PATH).unlink()
-
-    hub_api = HfApi()
-    if hub_api.file_exists(
-        repo_id=dataset.repo_id, filename=STATS_PATH, revision=branch, repo_type="dataset"
-    ):
-        hub_api.delete_file(
-            path_in_repo=STATS_PATH, repo_id=dataset.repo_id, revision=branch, repo_type="dataset"
-        )
-
-    hub_api.create_tag(repo_id, tag=CODEBASE_VERSION, revision=branch, repo_type="dataset")
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -98,10 +81,10 @@ if __name__ == "__main__":
         "(e.g. `lerobot/pusht`, `cadene/aloha_sim_insertion_human`).",
     )
     parser.add_argument(
-        "--branch",
+        "--root",
         type=str,
-        default=None,
-        help="Repo branch to push your dataset. Defaults to the main branch.",
+        default="/home/dips/Documents/datasets_lerobot/so100_test",
+        help="Root directory of the dataset. Defaults to '/home/dips/Documents/datasets_lerobot/so100_test'.",
     )
     parser.add_argument(
         "--num-workers",
@@ -110,5 +93,7 @@ if __name__ == "__main__":
         help="Number of workers for parallelizing stats compute. Defaults to 4.",
     )
 
+    # The program will only work if the info file belongs to v2.0. It will give error if the info file
+    # belongs to v2.1.
     args = parser.parse_args()
     convert_dataset(**vars(args))

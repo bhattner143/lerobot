@@ -65,8 +65,7 @@ from termcolor import colored
 from torch import Tensor, nn
 from tqdm import trange
 
-from lerobot.common.envs.factory import make_env
-from lerobot.common.envs.utils import add_envs_task, check_env_attributes_and_types, preprocess_observation
+
 from lerobot.common.policies.factory import make_policy
 from lerobot.common.policies.pretrained import PreTrainedPolicy
 from lerobot.common.policies.utils import get_device_from_parameters
@@ -82,7 +81,7 @@ from lerobot.configs.eval import EvalPipelineConfig
 
 
 def rollout(
-    env: gym.vector.VectorEnv,
+    # env: gym.vector.VectorEnv,
     policy: PreTrainedPolicy,
     seeds: list[int] | None = None,
     return_observations: bool = False,

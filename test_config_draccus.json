@@ -1,0 +1,13 @@
+{
+    "dataset_repo_id": "lerobot/sample_dataset",
+    "policy_type": "sample_policy",
+    "output_dir": "outputs/sample_training",
+    "job_name": "sample_job",
+    "device": "cuda",
+    "wandb_enable": true,
+    "steps": 5000,
+    "batch_size": 64,
+    "extra_args": ["--example_arg1=value1", "--example_arg2=value2"],
+    "optimizer": "adam",
+    "scheduler": "linear"
+}

@@ -76,56 +76,55 @@ from lerobot.common.robot_devices.robots.utils import Robot
 
 CODEBASE_VERSION = "v2.1"
 
-
+################META CLASS########################
 class LeRobotDatasetMetadata:
     def __init__(
         self,
-        repo_id: str,
-        root: str | Path | None = None,
-        revision: str | None = None,
-        force_cache_sync: bool = False,
+        repo_id: str,  # Name of the dataset repository on Hugging Face Hub
+        root: str | Path | None = None,  # Local path to the dataset (string, Path instance, or None)
+        revision: str | None = None,  # Git revision (branch, tag, or commit hash) to use
+        force_cache_sync: bool = False,  # Force synchronization with the remote repository
     ):
+        # Initialize the repository ID and revision (default to the current codebase version if not provided)
         self.repo_id = repo_id
         self.revision = revision if revision else CODEBASE_VERSION
+        # Set the root directory for the dataset (default to HF_LEROBOT_HOME/repo_id if not provided)
         self.root = Path(root) if root is not None else HF_LEROBOT_HOME / repo_id
 
+        # Load metadata from the local directory
         try:
-            if force_cache_sync:
-                raise FileNotFoundError
             self.load_metadata()
         except (FileNotFoundError, NotADirectoryError):
-            if is_valid_version(self.revision):
-                self.revision = get_safe_version(self.repo_id, self.revision)
-
-            (self.root / "meta").mkdir(exist_ok=True, parents=True)
-            self.pull_from_repo(allow_patterns="meta/")
-            self.load_metadata()
+            raise FileNotFoundError("Metadata could not be loaded. Ensure the directory and files exist.")
+        
 
     def load_metadata(self):
+        # Load the dataset's metadata information from the root directory.
         self.info = load_info(self.root)
+        
+        # Check if the dataset's version is compatible with the current codebase version.
         check_version_compatibility(self.repo_id, self._version, CODEBASE_VERSION)
+        
+        # Load the tasks and their corresponding indices from the dataset's metadata.
         self.tasks, self.task_to_task_index = load_tasks(self.root)
+        
+        # Load the episodes metadata from the dataset's root directory.
         self.episodes = load_episodes(self.root)
+
+        # If the dataset version is older than v2.1, handle backward compatibility for stats.
         if self._version < packaging.version.parse("v2.1"):
+            # Load the overall statistics of the dataset.
             self.stats = load_stats(self.root)
+            
+            # Generate episode-specific statistics in a backward-compatible manner.
             self.episodes_stats = backward_compatible_episodes_stats(self.stats, self.episodes)
         else:
+            # For newer versions, load episode-specific statistics directly.
             self.episodes_stats = load_episodes_stats(self.root)
+            
+            # Aggregate the statistics across all episodes.
             self.stats = aggregate_stats(list(self.episodes_stats.values()))
 
-    def pull_from_repo(
-        self,
-        allow_patterns: list[str] | str | None = None,
-        ignore_patterns: list[str] | str | None = None,
-    ) -> None:
-        snapshot_download(
-            self.repo_id,
-            repo_type="dataset",
-            revision=self.revision,
-            local_dir=self.root,
-            allow_patterns=allow_patterns,
-            ignore_patterns=ignore_patterns,
-        )
 
     @property
     def _version(self) -> packaging.version.Version:
@@ -310,47 +309,90 @@ class LeRobotDatasetMetadata:
         features: dict | None = None,
         use_videos: bool = True,
     ) -> "LeRobotDatasetMetadata":
-        """Creates metadata for a LeRobotDataset."""
+        """
+        Creates metadata for a LeRobotDataset. This method initializes the metadata structure
+        for a dataset, including its features, tasks, and other relevant information.
+
+        Args:
+            repo_id (str): The repository ID for the dataset.
+            fps (int): Frames per second used during data collection.
+            root (str | Path | None, optional): The root directory where the dataset will be stored.
+                Defaults to None, in which case the dataset will be stored under HF_LEROBOT_HOME/repo_id.
+            robot (Robot | None, optional): A Robot instance to extract features from. Defaults to None.
+            robot_type (str | None, optional): The type of robot used for data collection. Defaults to None.
+            features (dict | None, optional): A dictionary of dataset features. Defaults to None.
+            use_videos (bool, optional): Whether to use videos for visual modalities. Defaults to True.
+
+        Returns:
+            LeRobotDatasetMetadata: An instance of the metadata class for the dataset.
+
+        Raises:
+            ValueError: If neither a Robot instance nor explicit features are provided.
+            ValueError: If feature names contain a "/" character, which is not allowed.
+        """
+        # Create a new instance of the class without calling __init__
         obj = cls.__new__(cls)
+
+        # Set the repository ID and root directory for the dataset
         obj.repo_id = repo_id
         obj.root = Path(root) if root is not None else HF_LEROBOT_HOME / repo_id
 
-        obj.root.mkdir(parents=True, exist_ok=False)
+        # Create the root directory for the dataset, ensuring it does not already exist
+        obj.root.mkdir(parents=True, exist_ok=True)
 
+        # If a Robot instance is provided, extract features and robot type from it
         if robot is not None:
+            # Extract features from the robot, optionally using videos
             features = get_features_from_robot(robot, use_videos)
+            # Set the robot type based on the provided Robot instance
             robot_type = robot.robot_type
+
+            # Check if all cameras in the robot have the same FPS as the dataset
             if not all(cam.fps == fps for cam in robot.cameras.values()):
                 logging.warning(
                     f"Some cameras in your {robot.robot_type} robot don't have an fps matching the fps of your dataset."
                     "In this case, frames from lower fps cameras will be repeated to fill in the blanks."
                 )
+        # If no Robot instance is provided, ensure features are explicitly passed
         elif features is None:
             raise ValueError(
                 "Dataset features must either come from a Robot or explicitly passed upon creation."
             )
         else:
-            # TODO(aliberts, rcadene): implement sanity check for features
+            # Perform a sanity check on the provided features
+            # Add default features to the provided features
             features = {**features, **DEFAULT_FEATURES}
 
-            # check if none of the features contains a "/" in their names,
-            # as this would break the dict flattening in the stats computation, which uses '/' as separator
+            # Ensure that feature names do not contain a "/" character
             for key in features:
                 if "/" in key:
                     raise ValueError(f"Feature names should not contain '/'. Found '/' in feature '{key}'.")
 
+            # Add default features again to ensure completeness
             features = {**features, **DEFAULT_FEATURES}
 
+        # Initialize empty dictionaries for tasks, task indices, episode stats, and overall stats
         obj.tasks, obj.task_to_task_index = {}, {}
         obj.episodes_stats, obj.stats, obj.episodes = {}, {}, {}
+
+        # Create an empty dataset info dictionary with the provided parameters
         obj.info = create_empty_dataset_info(CODEBASE_VERSION, fps, robot_type, features, use_videos)
+
+        # If video keys are present but videos are not enabled, raise an error
         if len(obj.video_keys) > 0 and not use_videos:
-            raise ValueError()
+            raise ValueError("Video keys are present in the features, but 'use_videos' is set to False.")
+
+        # Write the dataset info to a JSON file in the root directory
         write_json(obj.info, obj.root / INFO_PATH)
+
+        # Set the revision to None (indicating no specific revision is being used)
         obj.revision = None
+
+        # Return the initialized metadata object
         return obj
 
 
+################DATASET CLASS########################
 class LeRobotDataset(torch.utils.data.Dataset):
     def __init__(
         self,
@@ -466,22 +508,22 @@ class LeRobotDataset(torch.utils.data.Dataset):
             video_backend (str | None, optional): Video backend to use for decoding videos. Defaults to torchcodec when available int the platform; otherwise, defaults to 'pyav'.
                 You can also use the 'pyav' decoder used by Torchvision, which used to be the default option, or 'video_reader' which is another decoder of Torchvision.
         """
-        super().__init__()
-        self.repo_id = repo_id
-        self.root = Path(root) if root else HF_LEROBOT_HOME / repo_id
-        self.image_transforms = image_transforms
-        self.delta_timestamps = delta_timestamps
-        self.episodes = episodes
-        self.tolerance_s = tolerance_s
-        self.revision = revision if revision else CODEBASE_VERSION
-        self.video_backend = video_backend if video_backend else get_safe_default_codec()
-        self.delta_indices = None
+        super().__init__()  # Call the parent class's constructor.
+        self.repo_id          = repo_id  # Repository ID for the dataset.
+        self.root             = Path(root) if root else HF_LEROBOT_HOME / repo_id  # Set the root directory for the dataset.
+        self.image_transforms = image_transforms  # Image transformations to apply to visual modalities.
+        self.delta_timestamps = delta_timestamps  # Delta timestamps for temporal alignment.
+        self.episodes         = episodes  # List of specific episodes to load, if provided.
+        self.tolerance_s      = tolerance_s  # Tolerance for timestamp synchronization.
+        self.revision         = revision if revision else CODEBASE_VERSION  # Git revision or codebase version.
+        self.video_backend    = video_backend if video_backend else get_safe_default_codec()  # Video decoding backend.
+        self.delta_indices    = None  # Placeholder for delta indices, initialized later.
 
         # Unused attributes
-        self.image_writer = None
-        self.episode_buffer = None
+        self.image_writer   = None  # Placeholder for an asynchronous image writer.
+        self.episode_buffer = None  # Placeholder for an episode buffer.
 
-        self.root.mkdir(exist_ok=True, parents=True)
+        self.root.mkdir(exist_ok=True, parents=True)  # Ensure the root directory exists, creating it if necessary.
 
         # Load metadata
         self.meta = LeRobotDatasetMetadata(
@@ -492,16 +534,10 @@ class LeRobotDataset(torch.utils.data.Dataset):
             self.stats = aggregate_stats(episodes_stats)
 
         # Load actual data
-        try:
-            if force_cache_sync:
-                raise FileNotFoundError
-            assert all((self.root / fpath).is_file() for fpath in self.get_episodes_file_paths())
-            self.hf_dataset = self.load_hf_dataset()
-        except (AssertionError, FileNotFoundError, NotADirectoryError):
-            self.revision = get_safe_version(self.repo_id, self.revision)
-            self.download_episodes(download_videos)
-            self.hf_dataset = self.load_hf_dataset()
+        self.hf_dataset = self.load_hf_dataset()
 
+        #Generates each episodes starting and ending index. E.g Ep1->0--890, Ep2->891--1781
+        #It takes the episodes.json file in form of self.meta.episodes
         self.episode_data_index = get_episode_data_index(self.meta.episodes, self.episodes)
 
         # Check timestamps
@@ -514,115 +550,91 @@ class LeRobotDataset(torch.utils.data.Dataset):
         if self.delta_timestamps is not None:
             check_delta_timestamps(self.delta_timestamps, self.fps, self.tolerance_s)
             self.delta_indices = get_delta_indices(self.delta_timestamps, self.fps)
-
-    def push_to_hub(
-        self,
-        branch: str | None = None,
-        tags: list | None = None,
-        license: str | None = "apache-2.0",
-        tag_version: bool = True,
-        push_videos: bool = True,
-        private: bool = False,
-        allow_patterns: list[str] | str | None = None,
-        upload_large_folder: bool = False,
-        **card_kwargs,
-    ) -> None:
-        ignore_patterns = ["images/"]
-        if not push_videos:
-            ignore_patterns.append("videos/")
-
-        hub_api = HfApi()
-        hub_api.create_repo(
-            repo_id=self.repo_id,
-            private=private,
-            repo_type="dataset",
-            exist_ok=True,
+    
+    @classmethod
+    def create(
+        cls,
+        repo_id: str,  # Repository ID for the dataset.
+        fps: int,  # Frames per second used during data collection.
+        root: str | Path | None = None,  # Root directory for the dataset.
+        robot: Robot | None = None,  # Robot instance to extract features from (optional).
+        robot_type: str | None = None,  # Type of robot used for data collection (optional).
+        features: dict | None = None,  # Dictionary of dataset features (optional).
+        use_videos: bool = True,  # Whether to use videos for visual modalities.
+        tolerance_s: float = 1e-4,  # Tolerance in seconds for timestamp synchronization.
+        image_writer_processes: int = 0,  # Number of processes for the image writer (optional).
+        image_writer_threads: int = 0,  # Number of threads for the image writer (optional).
+        video_backend: str | None = None,  # Video backend to use for decoding videos (optional).
+    ) -> "LeRobotDataset":
+        """Create a LeRobot Dataset from scratch in order to record data."""
+        
+        # Create a new instance of the class without calling __init__. This bypasses __init__
+        obj = cls.__new__(cls)
+        
+        # Create metadata for the dataset using the provided parameters.
+        obj.meta = LeRobotDatasetMetadata.create(
+            repo_id=repo_id,
+            fps=fps,
+            root=root,
+            robot=robot,
+            robot_type=robot_type,
+            features=features,
+            use_videos=use_videos,
         )
-        if branch:
-            hub_api.create_branch(
-                repo_id=self.repo_id,
-                branch=branch,
-                revision=self.revision,
-                repo_type="dataset",
-                exist_ok=True,
-            )
+        
+        # Set the repository ID and root directory for the dataset.
+        obj.repo_id = obj.meta.repo_id
+        obj.root = obj.meta.root
+        
+        # Set the revision to None (indicating no specific revision is being used).
+        obj.revision = None
+        
+        # Set the tolerance for timestamp synchronization.
+        obj.tolerance_s = tolerance_s
+        
+        # Initialize the image writer to None.
+        obj.image_writer = None
 
-        upload_kwargs = {
-            "repo_id": self.repo_id,
-            "folder_path": self.root,
-            "repo_type": "dataset",
-            "revision": branch,
-            "allow_patterns": allow_patterns,
-            "ignore_patterns": ignore_patterns,
-        }
-        if upload_large_folder:
-            hub_api.upload_large_folder(**upload_kwargs)
-        else:
-            hub_api.upload_folder(**upload_kwargs)
+        # If image writer processes or threads are specified, start the image writer.
+        if image_writer_processes or image_writer_threads:
+            obj.start_image_writer(image_writer_processes, image_writer_threads)
 
-        if not hub_api.file_exists(self.repo_id, REPOCARD_NAME, repo_type="dataset", revision=branch):
-            card = create_lerobot_dataset_card(
-                tags=tags, dataset_info=self.meta.info, license=license, **card_kwargs
-            )
-            card.push_to_hub(repo_id=self.repo_id, repo_type="dataset", revision=branch)
+        # Create an empty episode buffer for storing frames.
+        # TODO: Merge this with OnlineBuffer/DataBuffer for better integration.
+        obj.episode_buffer = obj.create_episode_buffer()
 
-        if tag_version:
-            with contextlib.suppress(RevisionNotFoundError):
-                hub_api.delete_tag(self.repo_id, tag=CODEBASE_VERSION, repo_type="dataset")
-            hub_api.create_tag(self.repo_id, tag=CODEBASE_VERSION, revision=branch, repo_type="dataset")
+        # Initialize other attributes for the dataset.
+        obj.episodes = None  # No specific episodes are selected initially.
+        obj.hf_dataset = obj.create_hf_dataset()  # Create an empty Hugging Face dataset.
+        obj.image_transforms = None  # No image transformations are applied initially.
+        obj.delta_timestamps = None  # No delta timestamps are provided initially.
+        obj.delta_indices = None  # No delta indices are calculated initially.
+        obj.episode_data_index = None  # No episode data index is calculated initially.
+        
+        # Set the video backend for decoding videos (default to a safe codec if not provided).
+        obj.video_backend = video_backend if video_backend is not None else get_safe_default_codec()
+        
+        # Return the initialized dataset object.
+        return obj
 
-    def pull_from_repo(
-        self,
-        allow_patterns: list[str] | str | None = None,
-        ignore_patterns: list[str] | str | None = None,
-    ) -> None:
-        snapshot_download(
-            self.repo_id,
-            repo_type="dataset",
-            revision=self.revision,
-            local_dir=self.root,
-            allow_patterns=allow_patterns,
-            ignore_patterns=ignore_patterns,
-        )
-
-    def download_episodes(self, download_videos: bool = True) -> None:
-        """Downloads the dataset from the given 'repo_id' at the provided version. If 'episodes' is given, this
-        will only download those episodes (selected by their episode_index). If 'episodes' is None, the whole
-        dataset will be downloaded. Thanks to the behavior of snapshot_download, if the files are already present
-        in 'local_dir', they won't be downloaded again.
-        """
-        # TODO(rcadene, aliberts): implement faster transfer
-        # https://huggingface.co/docs/huggingface_hub/en/guides/download#faster-downloads
-        files = None
-        ignore_patterns = None if download_videos else "videos/"
-        if self.episodes is not None:
-            files = self.get_episodes_file_paths()
-
-        self.pull_from_repo(allow_patterns=files, ignore_patterns=ignore_patterns)
-
-    def get_episodes_file_paths(self) -> list[Path]:
-        episodes = self.episodes if self.episodes is not None else list(range(self.meta.total_episodes))
-        fpaths = [str(self.meta.get_data_file_path(ep_idx)) for ep_idx in episodes]
-        if len(self.meta.video_keys) > 0:
-            video_files = [
-                str(self.meta.get_video_file_path(ep_idx, vid_key))
-                for vid_key in self.meta.video_keys
-                for ep_idx in episodes
-            ]
-            fpaths += video_files
-
-        return fpaths
 
     def load_hf_dataset(self) -> datasets.Dataset:
-        """hf_dataset contains all the observations, states, actions, rewards, etc."""
+        """
+        Load the Hugging Face dataset (hf_dataset) containing all the observations, states, actions, rewards, etc.
+
+        Returns:
+            datasets.Dataset: The loaded Hugging Face dataset.
+        """
         if self.episodes is None:
+            # If no specific episodes are provided, load all data from the "data" directory.
             path = str(self.root / "data")
             hf_dataset = load_dataset("parquet", data_dir=path, split="train")
         else:
+            # If specific episodes are provided, load only the corresponding parquet files.
             files = [str(self.root / self.meta.get_data_file_path(ep_idx)) for ep_idx in self.episodes]
             hf_dataset = load_dataset("parquet", data_files=files, split="train")
 
-        # TODO(aliberts): hf_dataset.set_format("torch")
+        # Set a transformation function to convert the dataset into PyTorch tensors.
         hf_dataset.set_transform(hf_transform_to_torch)
         return hf_dataset
 
@@ -984,234 +996,4 @@ class LeRobotDataset(torch.utils.data.Dataset):
 
         return video_paths
 
-    @classmethod
-    def create(
-        cls,
-        repo_id: str,
-        fps: int,
-        root: str | Path | None = None,
-        robot: Robot | None = None,
-        robot_type: str | None = None,
-        features: dict | None = None,
-        use_videos: bool = True,
-        tolerance_s: float = 1e-4,
-        image_writer_processes: int = 0,
-        image_writer_threads: int = 0,
-        video_backend: str | None = None,
-    ) -> "LeRobotDataset":
-        """Create a LeRobot Dataset from scratch in order to record data."""
-        obj = cls.__new__(cls)
-        obj.meta = LeRobotDatasetMetadata.create(
-            repo_id=repo_id,
-            fps=fps,
-            root=root,
-            robot=robot,
-            robot_type=robot_type,
-            features=features,
-            use_videos=use_videos,
-        )
-        obj.repo_id = obj.meta.repo_id
-        obj.root = obj.meta.root
-        obj.revision = None
-        obj.tolerance_s = tolerance_s
-        obj.image_writer = None
-
-        if image_writer_processes or image_writer_threads:
-            obj.start_image_writer(image_writer_processes, image_writer_threads)
-
-        # TODO(aliberts, rcadene, alexander-soare): Merge this with OnlineBuffer/DataBuffer
-        obj.episode_buffer = obj.create_episode_buffer()
-
-        obj.episodes = None
-        obj.hf_dataset = obj.create_hf_dataset()
-        obj.image_transforms = None
-        obj.delta_timestamps = None
-        obj.delta_indices = None
-        obj.episode_data_index = None
-        obj.video_backend = video_backend if video_backend is not None else get_safe_default_codec()
-        return obj
-
-
-class MultiLeRobotDataset(torch.utils.data.Dataset):
-    """A dataset consisting of multiple underlying `LeRobotDataset`s.
-
-    The underlying `LeRobotDataset`s are effectively concatenated, and this class adopts much of the API
-    structure of `LeRobotDataset`.
-    """
-
-    def __init__(
-        self,
-        repo_ids: list[str],
-        root: str | Path | None = None,
-        episodes: dict | None = None,
-        image_transforms: Callable | None = None,
-        delta_timestamps: dict[list[float]] | None = None,
-        tolerances_s: dict | None = None,
-        download_videos: bool = True,
-        video_backend: str | None = None,
-    ):
-        super().__init__()
-        self.repo_ids = repo_ids
-        self.root = Path(root) if root else HF_LEROBOT_HOME
-        self.tolerances_s = tolerances_s if tolerances_s else dict.fromkeys(repo_ids, 0.0001)
-        # Construct the underlying datasets passing everything but `transform` and `delta_timestamps` which
-        # are handled by this class.
-        self._datasets = [
-            LeRobotDataset(
-                repo_id,
-                root=self.root / repo_id,
-                episodes=episodes[repo_id] if episodes else None,
-                image_transforms=image_transforms,
-                delta_timestamps=delta_timestamps,
-                tolerance_s=self.tolerances_s[repo_id],
-                download_videos=download_videos,
-                video_backend=video_backend,
-            )
-            for repo_id in repo_ids
-        ]
-
-        # Disable any data keys that are not common across all of the datasets. Note: we may relax this
-        # restriction in future iterations of this class. For now, this is necessary at least for being able
-        # to use PyTorch's default DataLoader collate function.
-        self.disabled_features = set()
-        intersection_features = set(self._datasets[0].features)
-        for ds in self._datasets:
-            intersection_features.intersection_update(ds.features)
-        if len(intersection_features) == 0:
-            raise RuntimeError(
-                "Multiple datasets were provided but they had no keys common to all of them. "
-                "The multi-dataset functionality currently only keeps common keys."
-            )
-        for repo_id, ds in zip(self.repo_ids, self._datasets, strict=True):
-            extra_keys = set(ds.features).difference(intersection_features)
-            logging.warning(
-                f"keys {extra_keys} of {repo_id} were disabled as they are not contained in all the "
-                "other datasets."
-            )
-            self.disabled_features.update(extra_keys)
-
-        self.image_transforms = image_transforms
-        self.delta_timestamps = delta_timestamps
-        # TODO(rcadene, aliberts): We should not perform this aggregation for datasets
-        # with multiple robots of different ranges. Instead we should have one normalization
-        # per robot.
-        self.stats = aggregate_stats([dataset.meta.stats for dataset in self._datasets])
-
-    @property
-    def repo_id_to_index(self):
-        """Return a mapping from dataset repo_id to a dataset index automatically created by this class.
-
-        This index is incorporated as a data key in the dictionary returned by `__getitem__`.
-        """
-        return {repo_id: i for i, repo_id in enumerate(self.repo_ids)}
-
-    @property
-    def repo_index_to_id(self):
-        """Return the inverse mapping if repo_id_to_index."""
-        return {v: k for k, v in self.repo_id_to_index}
-
-    @property
-    def fps(self) -> int:
-        """Frames per second used during data collection.
-
-        NOTE: Fow now, this relies on a check in __init__ to make sure all sub-datasets have the same info.
-        """
-        return self._datasets[0].meta.info["fps"]
-
-    @property
-    def video(self) -> bool:
-        """Returns True if this dataset loads video frames from mp4 files.
-
-        Returns False if it only loads images from png files.
-
-        NOTE: Fow now, this relies on a check in __init__ to make sure all sub-datasets have the same info.
-        """
-        return self._datasets[0].meta.info.get("video", False)
-
-    @property
-    def features(self) -> datasets.Features:
-        features = {}
-        for dataset in self._datasets:
-            features.update({k: v for k, v in dataset.hf_features.items() if k not in self.disabled_features})
-        return features
-
-    @property
-    def camera_keys(self) -> list[str]:
-        """Keys to access image and video stream from cameras."""
-        keys = []
-        for key, feats in self.features.items():
-            if isinstance(feats, (datasets.Image, VideoFrame)):
-                keys.append(key)
-        return keys
-
-    @property
-    def video_frame_keys(self) -> list[str]:
-        """Keys to access video frames that requires to be decoded into images.
-
-        Note: It is empty if the dataset contains images only,
-        or equal to `self.cameras` if the dataset contains videos only,
-        or can even be a subset of `self.cameras` in a case of a mixed image/video dataset.
-        """
-        video_frame_keys = []
-        for key, feats in self.features.items():
-            if isinstance(feats, VideoFrame):
-                video_frame_keys.append(key)
-        return video_frame_keys
-
-    @property
-    def num_frames(self) -> int:
-        """Number of samples/frames."""
-        return sum(d.num_frames for d in self._datasets)
-
-    @property
-    def num_episodes(self) -> int:
-        """Number of episodes."""
-        return sum(d.num_episodes for d in self._datasets)
-
-    @property
-    def tolerance_s(self) -> float:
-        """Tolerance in seconds used to discard loaded frames when their timestamps
-        are not close enough from the requested frames. It is only used when `delta_timestamps`
-        is provided or when loading video frames from mp4 files.
-        """
-        # 1e-4 to account for possible numerical error
-        return 1 / self.fps - 1e-4
-
-    def __len__(self):
-        return self.num_frames
-
-    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
-        if idx >= len(self):
-            raise IndexError(f"Index {idx} out of bounds.")
-        # Determine which dataset to get an item from based on the index.
-        start_idx = 0
-        dataset_idx = 0
-        for dataset in self._datasets:
-            if idx >= start_idx + dataset.num_frames:
-                start_idx += dataset.num_frames
-                dataset_idx += 1
-                continue
-            break
-        else:
-            raise AssertionError("We expect the loop to break out as long as the index is within bounds.")
-        item = self._datasets[dataset_idx][idx - start_idx]
-        item["dataset_index"] = torch.tensor(dataset_idx)
-        for data_key in self.disabled_features:
-            if data_key in item:
-                del item[data_key]
-
-        return item
-
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}(\n"
-            f"  Repository IDs: '{self.repo_ids}',\n"
-            f"  Number of Samples: {self.num_frames},\n"
-            f"  Number of Episodes: {self.num_episodes},\n"
-            f"  Type: {'video (.mp4)' if self.video else 'image (.png)'},\n"
-            f"  Recorded Frames per Second: {self.fps},\n"
-            f"  Camera Keys: {self.camera_keys},\n"
-            f"  Video Frame Keys: {self.video_frame_keys if self.video else 'N/A'},\n"
-            f"  Transformations: {self.image_transforms},\n"
-            f")"
-        )
+    

@@ -106,6 +106,8 @@ def update_policy(
 
 
 @parser.wrap()
+# from pathlib import Path
+# @parser.wrap(config_path=Path("/home/dips/Documents/datasets_lerobot/so100_test/train_config/train_config.json"))
 def train(cfg: TrainPipelineConfig):
     cfg.validate()
     logging.info(pformat(cfg.to_dict()))
@@ -135,24 +137,33 @@ def train(cfg: TrainPipelineConfig):
         logging.info("Creating env")
         eval_env = make_env(cfg.env, n_envs=cfg.eval.batch_size, use_async_envs=cfg.eval.use_async_envs)
 
+    # Log the creation of the policy
     logging.info("Creating policy")
+    # Instantiate the policy using the configuration and dataset metadata
     policy = make_policy(
         cfg=cfg.policy,
         ds_meta=dataset.meta,
     )
 
+    # Log the creation of the optimizer and learning rate scheduler
     logging.info("Creating optimizer and scheduler")
+    # Create the optimizer and scheduler for training the policy
     optimizer, lr_scheduler = make_optimizer_and_scheduler(cfg, policy)
+    # Initialize the gradient scaler for mixed precision training (if enabled)
     grad_scaler = GradScaler(device.type, enabled=cfg.policy.use_amp)
 
-    step = 0  # number of policy updates (forward + backward + optim)
+    # Initialize the training step counter
+    step = 0  # Number of policy updates (forward + backward + optimization)
 
+    # If resuming training, load the previous training state
     if cfg.resume:
         step, optimizer, lr_scheduler = load_training_state(cfg.checkpoint_path, optimizer, lr_scheduler)
 
+    # Calculate the number of learnable and total parameters in the policy
     num_learnable_params = sum(p.numel() for p in policy.parameters() if p.requires_grad)
     num_total_params = sum(p.numel() for p in policy.parameters())
 
+    # Log various training and dataset details
     logging.info(colored("Output dir:", "yellow", attrs=["bold"]) + f" {cfg.output_dir}")
     if cfg.env is not None:
         logging.info(f"{cfg.env.task=}")
@@ -162,8 +173,9 @@ def train(cfg: TrainPipelineConfig):
     logging.info(f"{num_learnable_params=} ({format_big_number(num_learnable_params)})")
     logging.info(f"{num_total_params=} ({format_big_number(num_total_params)})")
 
-    # create dataloader for offline training
+    # Create a dataloader for offline training
     if hasattr(cfg.policy, "drop_n_last_frames"):
+        # Use a custom sampler if the policy requires dropping the last N frames
         shuffle = False
         sampler = EpisodeAwareSampler(
             dataset.episode_data_index,
@@ -171,44 +183,55 @@ def train(cfg: TrainPipelineConfig):
             shuffle=True,
         )
     else:
+        # Default behavior: shuffle the dataset
         shuffle = True
         sampler = None
 
+    # Initialize the PyTorch DataLoader with the dataset and configuration
     dataloader = torch.utils.data.DataLoader(
         dataset,
         num_workers=cfg.num_workers,
         batch_size=cfg.batch_size,
         shuffle=shuffle,
         sampler=sampler,
-        pin_memory=device.type != "cpu",
-        drop_last=False,
+        pin_memory=device.type != "cpu",  # Use pinned memory for GPU training
+        drop_last=False,  # Do not drop the last incomplete batch
     )
+    # Create an infinite iterator for the dataloader
     dl_iter = cycle(dataloader)
 
+    # Set the policy to training mode
     policy.train()
 
+    # Define metrics to track during training
     train_metrics = {
-        "loss": AverageMeter("loss", ":.3f"),
-        "grad_norm": AverageMeter("grdn", ":.3f"),
-        "lr": AverageMeter("lr", ":0.1e"),
-        "update_s": AverageMeter("updt_s", ":.3f"),
-        "dataloading_s": AverageMeter("data_s", ":.3f"),
+        "loss": AverageMeter("loss", ":.3f"),  # Track the loss
+        "grad_norm": AverageMeter("grdn", ":.3f"),  # Track the gradient norm
+        "lr": AverageMeter("lr", ":0.1e"),  # Track the learning rate
+        "update_s": AverageMeter("updt_s", ":.3f"),  # Track the update time
+        "dataloading_s": AverageMeter("data_s", ":.3f"),  # Track the data loading time
     }
 
+    # Initialize a metrics tracker for training
     train_tracker = MetricsTracker(
         cfg.batch_size, dataset.num_frames, dataset.num_episodes, train_metrics, initial_step=step
     )
 
+    # Log the start of offline training
     logging.info("Start offline training on a fixed dataset")
+    # Main training loop
     for _ in range(step, cfg.steps):
+        # Measure the time taken to load a batch
         start_time = time.perf_counter()
         batch = next(dl_iter)
         train_tracker.dataloading_s = time.perf_counter() - start_time
 
+        # Move the batch data to the appropriate device (e.g., GPU)
         for key in batch:
             if isinstance(batch[key], torch.Tensor):
                 batch[key] = batch[key].to(device, non_blocking=True)
 
+        # Update the policy using the current batch
         train_tracker, output_dict = update_policy(
             train_tracker,
             policy,
@@ -220,14 +243,17 @@ def train(cfg: TrainPipelineConfig):
             use_amp=cfg.policy.use_amp,
         )
 
-        # Note: eval and checkpoint happens *after* the `step`th training update has completed, so we
-        # increment `step` here.
+        # Increment the training step counter
         step += 1
+        # Update the metrics tracker for the current step
         train_tracker.step()
+
+        # Determine if it's time to log, save, or evaluate
         is_log_step = cfg.log_freq > 0 and step % cfg.log_freq == 0
         is_saving_step = step % cfg.save_freq == 0 or step == cfg.steps
         is_eval_step = cfg.eval_freq > 0 and step % cfg.eval_freq == 0
 
+        # Log training metrics at the specified frequency
         if is_log_step:
             logging.info(train_tracker)
             if wandb_logger:
@@ -237,6 +263,7 @@ def train(cfg: TrainPipelineConfig):
                 wandb_logger.log_dict(wandb_log_dict, step)
             train_tracker.reset_averages()
 
+        # Save a checkpoint at the specified frequency or at the end of training
         if cfg.save_checkpoint and is_saving_step:
             logging.info(f"Checkpoint policy after step {step}")
             checkpoint_dir = get_step_checkpoint_dir(cfg.output_dir, cfg.steps, step)
@@ -245,6 +272,7 @@ def train(cfg: TrainPipelineConfig):
             if wandb_logger:
                 wandb_logger.log_policy(checkpoint_dir)
 
+        # Evaluate the policy at the specified frequency
         if cfg.env and is_eval_step:
             step_id = get_step_identifier(step, cfg.steps)
             logging.info(f"Eval policy at step {step}")
@@ -261,10 +289,11 @@ def train(cfg: TrainPipelineConfig):
                     start_seed=cfg.seed,
                 )
 
+            # Track evaluation metrics
             eval_metrics = {
-                "avg_sum_reward": AverageMeter("∑rwrd", ":.3f"),
-                "pc_success": AverageMeter("success", ":.1f"),
-                "eval_s": AverageMeter("eval_s", ":.3f"),
+                "avg_sum_reward": AverageMeter("∑rwrd", ":.3f"),  # Average sum of rewards
+                "pc_success": AverageMeter("success", ":.1f"),  # Percentage of successful episodes
+                "eval_s": AverageMeter("eval_s", ":.3f"),  # Evaluation time
             }
             eval_tracker = MetricsTracker(
                 cfg.batch_size, dataset.num_frames, dataset.num_episodes, eval_metrics, initial_step=step
@@ -278,8 +307,10 @@ def train(cfg: TrainPipelineConfig):
                 wandb_logger.log_dict(wandb_log_dict, step, mode="eval")
                 wandb_logger.log_video(eval_info["video_paths"][0], step, mode="eval")
 
+    # Close the evaluation environment if it was created
     if eval_env:
         eval_env.close()
+    # Log the end of training
     logging.info("End of training")
 
 

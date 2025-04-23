@@ -1,0 +1,42 @@
+python lerobot/scripts/train_dips.py \
+    --policy.type=act \
+    --dataset.repo_id=lerobot/so_100_tele_op_cloth_flatening\
+    --env.type=aloha \
+    --env.task=AlohaTransferCube-v0 \
+    --output_dir=outputs/train/act_so_100_transfer
+
+
+
+python lerobot/scripts/visualize_dataset_html.py \
+  --repo-id ${HF_USER}/so100_test \
+  --root /home/dips/.cache/huggingface/lerobot/lerobot/so100_test
+
+
+python lerobot/scripts/train.py \
+    --policy.type=act \
+    --dataset.repo_id=lerobot/aloha_sim_insertion_human \
+    --env.type=aloha \
+    --output_dir=outputs/train/act_aloha_insertion
+
+
+python lerobot/scripts/train_dips.py \
+    --policy.type=act \
+    --dataset.repo_id=lerobot/aloha_sim_transfer_cube_human \
+    --env.type=aloha \
+    --env.task=AlohaTransferCube-v0 \
+    --output_dir=outputs/train/act_aloha_transfer
+
+
+python lerobot/scripts/train_dips.py \
+    --policy.type=act \
+    --dataset.repo_id=lerobot/aloha_mobile_cabinet \
+    --env.type=aloha \
+    --env.task=AlohaTransferCube-v0 \
+    --output_dir=outputs/train/act_aloha_transfer
+
+python lerobot/scripts/train_dips.py \
+    --policy.type=act \
+    --dataset.repo_id=lerobot/so100_test \
+    --env.type=aloha \
+    --env.task=AlohaTransferCube-v0 \
+    --output_dir=outputs/train/act_so100_test_transfer

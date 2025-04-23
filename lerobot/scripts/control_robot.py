@@ -411,20 +411,30 @@ def control_robot(cfg: ControlPipelineConfig):
 
     # TODO(Steven): Blueprint for fixed window size
 
+    # Check the type of control configuration and execute the corresponding control mode
     if isinstance(cfg.control, CalibrateControlConfig):
+        # Perform calibration for the robot
         calibrate(robot, cfg.control)
     elif isinstance(cfg.control, TeleoperateControlConfig):
+        # Initialize Rerun for teleoperation visualization
         _init_rerun(control_config=cfg.control, session_name="lerobot_control_loop_teleop")
+        # Start teleoperation mode
         teleoperate(robot, cfg.control)
     elif isinstance(cfg.control, RecordControlConfig):
+        # Initialize Rerun for recording visualization
         _init_rerun(control_config=cfg.control, session_name="lerobot_control_loop_record")
+        # Start recording mode to collect dataset
         record(robot, cfg.control)
     elif isinstance(cfg.control, ReplayControlConfig):
+        # Replay a previously recorded episode
         replay(robot, cfg.control)
     elif isinstance(cfg.control, RemoteRobotConfig):
+        # Import the remote robot control logic for LeKiwi
         from lerobot.common.robot_devices.robots.lekiwi_remote import run_lekiwi
 
+        # Initialize Rerun for remote robot visualization
         _init_rerun(control_config=cfg.control, session_name="lerobot_control_loop_remote")
+        # Run the remote robot control logic
         run_lekiwi(cfg.robot)
 
     if robot.is_connected:

@@ -1,18 +1,4 @@
 #!/usr/bin/env python
-
-# Copyright 2024 Tony Z. Zhao and The HuggingFace Inc. team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """Action Chunking Transformer Policy
 
 As per Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware (https://arxiv.org/abs/2304.13705).
@@ -33,23 +19,19 @@ from torch import Tensor, nn
 from torchvision.models._utils import IntermediateLayerGetter
 from torchvision.ops.misc import FrozenBatchNorm2d
 
-from lerobot.common.policies.act.configuration_act import ACTConfig
+from lerobot.common.policies.act_advanced.configuration_act_advanced import ACTConfigAdvanced
 from lerobot.common.policies.normalize import Normalize, Unnormalize
 from lerobot.common.policies.pretrained import PreTrainedPolicy
 
 
-class ACTPolicy(PreTrainedPolicy):
-    """
-    Action Chunking Transformer Policy as per Learning Fine-Grained Bimanual Manipulation with Low-Cost
-    Hardware (paper: https://arxiv.org/abs/2304.13705, code: https://github.com/tonyzhaozh/act)
-    """
+class ACTPolicyAdvanced(PreTrainedPolicy):
 
-    config_class = ACTConfig
+    config_class = ACTConfigAdvanced
     name = "act"
 
     def __init__(
         self,
-        config: ACTConfig,
+        config: ACTConfigAdvanced,
         dataset_stats: dict[str, dict[str, Tensor]] | None = None,
     ):
         """
@@ -71,10 +53,10 @@ class ACTPolicy(PreTrainedPolicy):
             config.output_features, config.normalization_mapping, dataset_stats
         )
 
-        self.model = ACT(config)
+        self.model = ACTAdvanced(config)
 
         if config.temporal_ensemble_coeff is not None:
-            self.temporal_ensembler = ACTTemporalEnsembler(config.temporal_ensemble_coeff, config.chunk_size)
+            self.temporal_ensembler = ACTAdvancedTemporalEnsembler(config.temporal_ensemble_coeff, config.chunk_size)
 
         self.reset()
 
@@ -173,7 +155,7 @@ class ACTPolicy(PreTrainedPolicy):
         return loss, loss_dict
 
 
-class ACTTemporalEnsembler:
+class ACTAdvancedTemporalEnsembler:
     def __init__(self, temporal_ensemble_coeff: float, chunk_size: int) -> None:
         """Temporal ensembling as described in Algorithm 2 of https://arxiv.org/abs/2304.13705.
 
@@ -264,7 +246,7 @@ class ACTTemporalEnsembler:
         return action
 
 
-class ACT(nn.Module):
+class ACTAdvanced(nn.Module):
     """Action Chunking Transformer: The underlying neural network for ACTPolicy.
 
     Note: In this code we use the terms `vae_encoder`, 'encoder', `decoder`. The meanings are as follows.
@@ -299,7 +281,7 @@ class ACT(nn.Module):
                                 └───────────────────────┘
     """
 
-    def __init__(self, config: ACTConfig):
+    def __init__(self, config: ACTConfigAdvanced):
         # BERT style VAE encoder with input tokens [cls, robot_state, *action_sequence].
         # The cls token forms parameters of the latent's distribution (like this [*means, *log_variances]).
         super().__init__()
@@ -541,7 +523,7 @@ class ACT(nn.Module):
 class ACTEncoder(nn.Module):
     """Convenience module for running multiple encoder layers, maybe followed by normalization."""
 
-    def __init__(self, config: ACTConfig, is_vae_encoder: bool = False):
+    def __init__(self, config: ACTConfigAdvanced, is_vae_encoder: bool = False):
         super().__init__()
         self.is_vae_encoder = is_vae_encoder
         num_layers = config.n_vae_encoder_layers if self.is_vae_encoder else config.n_encoder_layers
@@ -558,7 +540,7 @@ class ACTEncoder(nn.Module):
 
 
 class ACTEncoderLayer(nn.Module):
-    def __init__(self, config: ACTConfig):
+    def __init__(self, config: ACTConfigAdvanced):
         super().__init__()
         self.self_attn = nn.MultiheadAttention(config.dim_model, config.n_heads, dropout=config.dropout)
 
@@ -597,7 +579,7 @@ class ACTEncoderLayer(nn.Module):
 
 
 class ACTDecoder(nn.Module):
-    def __init__(self, config: ACTConfig):
+    def __init__(self, config: ACTConfigAdvanced):
         """Convenience module for running multiple decoder layers followed by normalization."""
         super().__init__()
         self.layers = nn.ModuleList([ACTDecoderLayer(config) for _ in range(config.n_decoder_layers)])
@@ -620,7 +602,7 @@ class ACTDecoder(nn.Module):
 
 
 class ACTDecoderLayer(nn.Module):
-    def __init__(self, config: ACTConfig):
+    def __init__(self, config: ACTConfigAdvanced):
         super().__init__()
         self.self_attn = nn.MultiheadAttention(config.dim_model, config.n_heads, dropout=config.dropout)
         self.multihead_attn = nn.MultiheadAttention(config.dim_model, config.n_heads, dropout=config.dropout)

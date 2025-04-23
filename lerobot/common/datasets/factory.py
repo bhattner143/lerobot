@@ -20,8 +20,7 @@ import torch
 
 from lerobot.common.datasets.lerobot_dataset import (
     LeRobotDataset,
-    LeRobotDatasetMetadata,
-    MultiLeRobotDataset,
+    LeRobotDatasetMetadata
 )
 from lerobot.common.datasets.transforms import ImageTransforms
 from lerobot.configs.policies import PreTrainedConfig
@@ -66,7 +65,7 @@ def resolve_delta_timestamps(
     return delta_timestamps
 
 
-def make_dataset(cfg: TrainPipelineConfig) -> LeRobotDataset | MultiLeRobotDataset:
+def make_dataset(cfg: TrainPipelineConfig) -> LeRobotDataset:
     """Handles the logic of setting up delta timestamps and image transforms before creating a dataset.
 
     Args:
@@ -78,41 +77,36 @@ def make_dataset(cfg: TrainPipelineConfig) -> LeRobotDataset | MultiLeRobotDatas
     Returns:
         LeRobotDataset | MultiLeRobotDataset
     """
+    # Initialize image transforms if enabled in the dataset configuration
     image_transforms = (
         ImageTransforms(cfg.dataset.image_transforms) if cfg.dataset.image_transforms.enable else None
     )
+    # Create metadata for the dataset using the repository ID, root directory, and revision
+    # It loads the info, stats(v2.0)/episodes_stats(v2.1), episodes, and tasks files from the meta directory
+    ds_meta = LeRobotDatasetMetadata(
+        cfg.dataset.repo_id, root=cfg.dataset.root, revision=cfg.dataset.revision
+    )
+    
+    # Resolve delta timestamps based on the policy configuration and dataset metadata
+    delta_timestamps = resolve_delta_timestamps(cfg.policy, ds_meta)
+    
+    # Create a single LeRobotDataset instance with the resolved parameters
+    dataset = LeRobotDataset(
+        cfg.dataset.repo_id,  # Repository ID of the dataset
+        root=cfg.dataset.root,  # Root directory where the dataset is stored
+        episodes=cfg.dataset.episodes,  # Number of episodes to load
+        delta_timestamps=delta_timestamps,  # Delta timestamps for temporal features
+        image_transforms=image_transforms,  # Image transformations to apply
+        revision=cfg.dataset.revision,  # Dataset revision to use
+        video_backend=cfg.dataset.video_backend,  # Backend for video processing
+    )
 
-    if isinstance(cfg.dataset.repo_id, str):
-        ds_meta = LeRobotDatasetMetadata(
-            cfg.dataset.repo_id, root=cfg.dataset.root, revision=cfg.dataset.revision
-        )
-        delta_timestamps = resolve_delta_timestamps(cfg.policy, ds_meta)
-        dataset = LeRobotDataset(
-            cfg.dataset.repo_id,
-            root=cfg.dataset.root,
-            episodes=cfg.dataset.episodes,
-            delta_timestamps=delta_timestamps,
-            image_transforms=image_transforms,
-            revision=cfg.dataset.revision,
-            video_backend=cfg.dataset.video_backend,
-        )
-    else:
-        raise NotImplementedError("The MultiLeRobotDataset isn't supported for now.")
-        dataset = MultiLeRobotDataset(
-            cfg.dataset.repo_id,
-            # TODO(aliberts): add proper support for multi dataset
-            # delta_timestamps=delta_timestamps,
-            image_transforms=image_transforms,
-            video_backend=cfg.dataset.video_backend,
-        )
-        logging.info(
-            "Multiple datasets were provided. Applied the following index mapping to the provided datasets: "
-            f"{pformat(dataset.repo_id_to_index, indent=2)}"
-        )
-
+    # If ImageNet statistics are enabled in the configuration, apply them to the dataset
     if cfg.dataset.use_imagenet_stats:
-        for key in dataset.meta.camera_keys:
-            for stats_type, stats in IMAGENET_STATS.items():
+        for key in dataset.meta.camera_keys:  # Iterate over all camera keys in the dataset metadata
+            for stats_type, stats in IMAGENET_STATS.items():  # Iterate over mean and std statistics
+                # Update the dataset metadata with ImageNet statistics for each camera key
                 dataset.meta.stats[key][stats_type] = torch.tensor(stats, dtype=torch.float32)
 
+    # Return the constructed dataset (either single or multi-dataset)
     return dataset
