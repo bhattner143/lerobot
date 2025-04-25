@@ -1,139 +1,4 @@
-# Copyright 2024 The HuggingFace Inc. team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""
-Utilities to control a robot.
-
-Useful to record a dataset, replay a recorded episode, run the policy on your robot
-and record an evaluation dataset, and to recalibrate your robot if needed.
-
-Examples of usage:
-
-- Recalibrate your robot:
-```bash
-python lerobot/scripts/control_robot.py \
-    --robot.type=so100 \
-    --control.type=calibrate
-```
-
-- Unlimited teleoperation at highest frequency (~200 Hz is expected), to exit with CTRL+C:
-```bash
-python lerobot/scripts/control_robot.py \
-    --robot.type=so100 \
-    --robot.cameras='{}' \
-    --control.type=teleoperate
-
-# Add the cameras from the robot definition to visualize them:
-python lerobot/scripts/control_robot.py \
-    --robot.type=so100 \
-    --control.type=teleoperate
-```
-
-- Unlimited teleoperation at a limited frequency of 30 Hz, to simulate data recording frequency:
-```bash
-python lerobot/scripts/control_robot.py \
-    --robot.type=so100 \
-    --control.type=teleoperate \
-    --control.fps=30
-```
-
-- Record one episode in order to test replay:
-```bash
-python lerobot/scripts/control_robot.py \
-    --robot.type=so100 \
-    --control.type=record \
-    --control.fps=30 \
-    --control.single_task="Grasp a lego block and put it in the bin." \
-    --control.repo_id=$USER/koch_test \
-    --control.num_episodes=1 \
-    --control.push_to_hub=True
-```
-
-- Visualize dataset:
-```bash
-python lerobot/scripts/visualize_dataset.py \
-    --repo-id $USER/koch_test \
-    --episode-index 0
-```
-
-- Replay this test episode:
-```bash
-python lerobot/scripts/control_robot.py replay \
-    --robot.type=so100 \
-    --control.type=replay \
-    --control.fps=30 \
-    --control.repo_id=$USER/koch_test \
-    --control.episode=0
-```
-
-- Record a full dataset in order to train a policy, with 2 seconds of warmup,
-30 seconds of recording for each episode, and 10 seconds to reset the environment in between episodes:
-```bash
-python lerobot/scripts/control_robot.py record \
-    --robot.type=so100 \
-    --control.type=record \
-    --control.fps 30 \
-    --control.repo_id=$USER/koch_pick_place_lego \
-    --control.num_episodes=50 \
-    --control.warmup_time_s=2 \
-    --control.episode_time_s=30 \
-    --control.reset_time_s=10
-```
-
-- For remote controlled robots like LeKiwi, run this script on the robot edge device (e.g. RaspBerryPi):
-```bash
-python lerobot/scripts/control_robot.py \
-  --robot.type=lekiwi \
-  --control.type=remote_robot
-```
-
-**NOTE**: You can use your keyboard to control data recording flow.
-- Tap right arrow key '->' to early exit while recording an episode and go to resseting the environment.
-- Tap right arrow key '->' to early exit while resetting the environment and got to recording the next episode.
-- Tap left arrow key '<-' to early exit and re-record the current episode.
-- Tap escape key 'esc' to stop the data recording.
-This might require a sudo permission to allow your terminal to monitor keyboard events.
-
-**NOTE**: You can resume/continue data recording by running the same data recording command and adding `--control.resume=true`.
-
-- Train on this dataset with the ACT policy:
-```bash
-python lerobot/scripts/train.py \
-  --dataset.repo_id=${HF_USER}/koch_pick_place_lego \
-  --policy.type=act \
-  --output_dir=outputs/train/act_koch_pick_place_lego \
-  --job_name=act_koch_pick_place_lego \
-  --device=cuda \
-  --wandb.enable=true
-```
-
-- Run the pretrained policy on the robot:
-```bash
-python lerobot/scripts/control_robot.py \
-    --robot.type=so100 \
-    --control.type=record \
-    --control.fps=30 \
-    --control.single_task="Grasp a lego block and put it in the bin." \
-    --control.repo_id=$USER/eval_act_koch_pick_place_lego \
-    --control.num_episodes=10 \
-    --control.warmup_time_s=2 \
-    --control.episode_time_s=30 \
-    --control.reset_time_s=10 \
-    --control.push_to_hub=true \
-    --control.policy.path=outputs/train/act_koch_pick_place_lego/checkpoints/080000/pretrained_model
-```
-"""
-
+# -*- coding: utf-8 -*-
 import logging
 import os
 import time
@@ -150,7 +15,6 @@ from lerobot.common.robot_devices.control_configs import (
     ControlConfig,
     ControlPipelineConfig,
     RecordControlConfig,
-    RemoteRobotConfig,
     ReplayControlConfig,
     TeleoperateControlConfig,
 )
@@ -169,7 +33,7 @@ from lerobot.common.robot_devices.control_utils import (
 from lerobot.common.robot_devices.robots.utils import Robot, make_robot_from_config
 from lerobot.common.robot_devices.utils import busy_wait, safe_disconnect
 from lerobot.common.utils.utils import has_method, init_logging, log_say
-from lerobot.configs import parser
+from lerobot.configs import parser_dips
 
 ########################################################################################
 # Control modes
@@ -246,7 +110,7 @@ def record(
     robot: Robot,
     cfg: RecordControlConfig,
 ) -> LeRobotDataset:
-    # TODO(rcadene): Add option to record logs
+
     if cfg.resume:
         dataset = LeRobotDataset(
             cfg.repo_id,
@@ -271,9 +135,11 @@ def record(
             image_writer_threads=cfg.num_image_writer_threads_per_camera * len(robot.cameras),
         )
 
-    # Load pretrained policy
+    ####### Load pretrained policy #######
     policy = None if cfg.policy is None else make_policy(cfg.policy, ds_meta=dataset.meta)
 
+
+    #######Load the Robot#######
     if not robot.is_connected:
         robot.connect()
 
@@ -402,11 +268,11 @@ def _init_rerun(control_config: ControlConfig, session_name: str = "lerobot_cont
             rr.spawn(memory_limit=memory_limit)
 
 
-@parser.wrap()
+@parser_dips.wrap()
 def control_robot(cfg: ControlPipelineConfig):
     init_logging()
     logging.info(pformat(asdict(cfg)))
-
+    xxxxx
     robot = make_robot_from_config(cfg.robot)
 
     # TODO(Steven): Blueprint for fixed window size
@@ -428,14 +294,6 @@ def control_robot(cfg: ControlPipelineConfig):
     elif isinstance(cfg.control, ReplayControlConfig):
         # Replay a previously recorded episode
         replay(robot, cfg.control)
-    elif isinstance(cfg.control, RemoteRobotConfig):
-        # Import the remote robot control logic for LeKiwi
-        from lerobot.common.robot_devices.robots.lekiwi_remote import run_lekiwi
-
-        # Initialize Rerun for remote robot visualization
-        _init_rerun(control_config=cfg.control, session_name="lerobot_control_loop_remote")
-        # Run the remote robot control logic
-        run_lekiwi(cfg.robot)
 
     if robot.is_connected:
         # Disconnect manually to avoid a "Core dump" during process

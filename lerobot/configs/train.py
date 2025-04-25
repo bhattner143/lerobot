@@ -1,16 +1,3 @@
-# Copyright 2024 The HuggingFace Inc. team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 # Import necessary modules
 import datetime as dt  # For handling date and time
@@ -183,23 +170,7 @@ class TrainPipelineConfig(HubMixin):
             # Use the provided file path
             config_file = model_id
         else:
-            # Attempt to download the configuration from the HuggingFace Hub
-            try:
-                config_file = hf_hub_download(
-                    repo_id=model_id,
-                    filename=TRAIN_CONFIG_NAME,
-                    revision=revision,
-                    cache_dir=cache_dir,
-                    force_download=force_download,
-                    proxies=proxies,
-                    resume_download=resume_download,
-                    token=token,
-                    local_files_only=local_files_only,
-                )
-            except HfHubHTTPError as e:
-                raise FileNotFoundError(
-                    f"{TRAIN_CONFIG_NAME} not found on the HuggingFace Hub in {model_id}"
-                ) from e
+            Exception(f"File {config_file} not found")
 
         # Parse the configuration file with optional command-line arguments
         cli_args = kwargs.pop("cli_args", [])
@@ -207,53 +178,3 @@ class TrainPipelineConfig(HubMixin):
 
         return cfg
     
-if __name__ == "__main__":
-
-    # Create a sample DatasetConfig
-    dataset_config = DatasetConfig(
-        repo_id="datasets_lerobot/so100_test",
-        root=Path("/path/to/dataset")
-    )
-
-    # Load the PreTrainedConfig using the `from_pretrained` method
-    policy_config = PreTrainedConfig.from_pretrained(
-        pretrained_name_or_path="/path/to/pretrained/policy",
-        cli_overrides=["--n_obs_steps=5", "--use_amp=true"]
-    )
-
-    # Create a sample OptimizerConfig
-    optimizer_config = OptimizerConfig(
-        learning_rate=0.001,
-        weight_decay=0.01
-    )
-
-    # Create a sample SchedulerConfig
-    scheduler_config = LRSchedulerConfig(
-        scheduler_type="linear",
-        warmup_steps=1000
-    )
-
-    # Create a TrainPipelineConfig object
-    train_config = TrainPipelineConfig(
-        dataset=dataset_config,
-        policy=policy_config,
-        output_dir=Path("outputs/train/act_so100_test"),
-        job_name="act_advanced_training",
-        resume=False,
-        seed=42,
-        num_workers=8,
-        batch_size=16,
-        steps=50000,
-        eval_freq=5000,
-        log_freq=100,
-        save_checkpoint=True,
-        save_freq=10000,
-        use_policy_training_preset=False,
-        optimizer=optimizer_config,
-        scheduler=scheduler_config,
-        eval=EvalConfig(),
-        wandb=WandBConfig(enable=False)
-    )
-
-    # Print the configuration
-    print(train_config)

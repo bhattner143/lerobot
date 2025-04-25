@@ -1,0 +1,90 @@
+from pprint import pprint
+
+import torch
+from huggingface_hub import HfApi
+
+import lerobot
+from lerobot.common.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
+
+##########EXAMPLE OF LOADING A META OF A DATASET##########
+# Let's take this one for this example
+repo_id = "lerobot/so_100_tele_op_cloth_flatening"
+
+# We can have a look and fetch its metadata to know more about it:
+ds_meta = LeRobotDatasetMetadata(repo_id, root = '/media/dips/New Volume/data/lerobot/so_100_tele_op_cloth_flatening/')
+
+print(f"Total number of episodes: {ds_meta.total_episodes}")
+print(f"Average number of frames per episode: {ds_meta.total_frames / ds_meta.total_episodes:.3f}")
+print(f"Frames per second used during data collection: {ds_meta.fps}")
+print(f"Robot type: {ds_meta.robot_type}")
+print(f"keys to access images from cameras: {ds_meta.camera_keys=}\n")
+
+##########EXAMPLE OF LOADING A DATASET##########
+dataset = LeRobotDataset(repo_id, episodes=[0, 10, 20, 30, 40, 50], root = '/media/dips/New Volume/data/lerobot/so_100_tele_op_cloth_flatening/')
+
+print(f"Number of episodes selected: {dataset.num_episodes}")
+print(f"Number of frames selected: {dataset.num_frames}")
+
+
+# Or simply load the entire dataset:
+dataset_all = LeRobotDataset(repo_id,root = '/media/dips/New Volume/data/lerobot/so_100_tele_op_cloth_flatening/')
+print(f"Number of episodes selected: {dataset_all.num_episodes}")
+print(f"Number of frames selected: {dataset_all.num_frames}")
+
+####HOW TO ACCESS PARTICULAR EPISODE DATA#####
+# The __getitem__ iterates over the frames of the dataset. Since our datasets are also structured by
+# episodes, you can access the frame indices of any episode using the episode_data_index. Here, we access
+# frame indices associated to the first episode:
+
+# In dataset_all it seems all the episode videos are conactenated so the following program helps to extract 
+# the beginning and end frame indices of required episode
+#
+episode_index = 84
+from_idx = dataset_all.episode_data_index["from"][episode_index].item()# extract the first episode start index
+to_idx   = dataset_all.episode_data_index["to"][episode_index].item()# extract the first episode end index
+print(f"from_idx: {from_idx}")
+print(f"to_idx:   {to_idx}")
+
+
+# Then we grab all the image frames from the first camera:
+camera_key = dataset_all.meta.camera_keys[0]
+frames = [dataset_all[idx][camera_key] for idx in range(from_idx, to_idx)]
+
+# The objects returned by the dataset are all torch.Tensors
+print(type(frames[0]))
+print(frames[0].shape)
+
+########CHECKING THE DATASET FRAME SHAPE##########
+# Since we're using pytorch, the shape is in pytorch, channel-first convention (c, h, w).
+# We can compare this shape with the information available for that feature
+print("Features of the dataset:")
+pprint(dataset_all.features[camera_key])
+# In particular:
+print(dataset_all.features[camera_key]["shape"])
+# The shape is in (h, w, c) which is a more universal format.
+
+##########
+# For many machine learning applications we need to load the history of past observations or trajectories of
+# future actions. Our datasets can load previous and future frames for each key/modality, using timestamps
+# differences with the current loaded frame. For instance:
+delta_timestamps = {
+    # loads 4 images: 1 second before current frame, 500 ms before, 200 ms before, and current frame
+    camera_key: [-1, -0.8, -0.6, -0.4, -0.20, 0],
+    # loads 6 state vectors: 1.5 seconds before, 1 second before, ... 200 ms, 100 ms, and current frame
+    "observation.state": [-1.5, -1, -0.5, -0.20, -0.10, 0],
+    # loads 64 action vectors: current frame, 1 frame in the future, 2 frames, ... 63 frames in the future
+    "action": [t / dataset.fps for t in range(64)],
+}
+print(delta_timestamps)
+# Note that in any case, these delta_timestamps values need to be multiples of (1/fps) so that added to any
+# timestamp, you still get a valid timestamp.
+
+dataset_present_past = LeRobotDataset(repo_id, delta_timestamps=delta_timestamps,
+                                      root = '/media/dips/New Volume/data/lerobot/so_100_tele_op_cloth_flatening/')
+print(f"\n{dataset_all[0][camera_key].shape=}")  # (4, c, h, w)
+print(f"{dataset_all[0]['observation.state'].shape=}")  # (6, c)
+print(f"{dataset_all[0]['action'].shape=}\n")  # (64, c)
+
+print(f"\n{dataset_present_past[0][camera_key].shape=}")  # (4, c, h, w)
+print(f"{dataset_present_past[0]['observation.state'].shape=}")  # (6, c)
+print(f"{dataset_present_past[0]['action'].shape=}\n")  # (64, c)

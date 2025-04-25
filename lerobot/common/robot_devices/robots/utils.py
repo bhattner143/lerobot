@@ -15,15 +15,9 @@
 from typing import Protocol
 
 from lerobot.common.robot_devices.robots.configs import (
-    AlohaRobotConfig,
-    KochBimanualRobotConfig,
-    KochRobotConfig,
-    LeKiwiRobotConfig,
     ManipulatorRobotConfig,
-    MossRobotConfig,
     RobotConfig,
     So100RobotConfig,
-    StretchRobotConfig,
 )
 
 
