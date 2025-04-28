@@ -24,6 +24,14 @@ class CalibrateControlConfig(ControlConfig):
     # List of arms to calibrate (e.g. `--arms='["left_follower","right_follower"]' left_leader`)
     arms: list[str] | None = None
 
+    def __post_init__(self):
+        # Initialize logging
+        init_logging()
+        # Set the logging level to INFO
+        logging.getLogger().setLevel(logging.INFO)
+        # Log the configuration
+        logging.info(f"CalibrateControlConfig initialized with arms: {self.arms}")
+
 
 @ControlConfig.register_subclass("teleoperate")
 @dataclass
@@ -110,6 +118,9 @@ class ReplayControlConfig(ControlConfig):
 class ControlPipelineConfig:
     robot: RobotConfig
     control: ControlConfig
+
+    def __post_init__(self):
+        print(f"Initialized ControlPipelineConfig with robot={self.robot}, control={self.control}")
 
     @classmethod
     def __get_path_fields__(cls) -> list[str]:
