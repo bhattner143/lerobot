@@ -1,16 +1,4 @@
 # Copyright 2024 The HuggingFace Inc. team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
 from typing import Protocol
 
@@ -18,6 +6,7 @@ from lerobot.common.robot_devices.robots.configs import (
     ManipulatorRobotConfig,
     RobotConfig,
     So100RobotConfig,
+    DensoRobotConfig
 )
 
 
@@ -42,20 +31,10 @@ class Robot(Protocol):
 
 
 def make_robot_config(robot_type: str, **kwargs) -> RobotConfig:
-    if robot_type == "aloha":
-        return AlohaRobotConfig(**kwargs)
-    elif robot_type == "koch":
-        return KochRobotConfig(**kwargs)
-    elif robot_type == "koch_bimanual":
-        return KochBimanualRobotConfig(**kwargs)
-    elif robot_type == "moss":
-        return MossRobotConfig(**kwargs)
+    if robot_type == "denso":
+        return DensoRobotConfig(**kwargs)
     elif robot_type == "so100":
         return So100RobotConfig(**kwargs)
-    elif robot_type == "stretch":
-        return StretchRobotConfig(**kwargs)
-    elif robot_type == "lekiwi":
-        return LeKiwiRobotConfig(**kwargs)
     else:
         raise ValueError(f"Robot type '{robot_type}' is not available.")
 
@@ -65,14 +44,14 @@ def make_robot_from_config(config: RobotConfig):
         from lerobot.common.robot_devices.robots.manipulator import ManipulatorRobot
 
         return ManipulatorRobot(config)
-    elif isinstance(config, LeKiwiRobotConfig):
-        from lerobot.common.robot_devices.robots.mobile_manipulator import MobileManipulator
+    elif isinstance(config, DensoRobotConfig):
+        from lerobot.common.robot_devices.robots.remote_manipulator import RemoteMobileManipulator
 
-        return MobileManipulator(config)
+        return RemoteMobileManipulator(config)
     else:
-        from lerobot.common.robot_devices.robots.stretch import StretchRobot
-
-        return StretchRobot(config)
+        raise ValueError(
+            f"Robot type '{config.type}' is not available. Please check the robot type in the configuration."
+        )
 
 
 def make_robot(robot_type: str, **kwargs) -> Robot:

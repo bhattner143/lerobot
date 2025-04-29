@@ -28,16 +28,6 @@ def get_motor_bus_cls(brand: str) -> tuple:
 
         return FeetechMotorsBusConfig, FeetechMotorsBus, MODEL_BAUDRATE_TABLE, SCS_SERIES_BAUDRATE_TABLE
 
-    elif brand == "dynamixel":
-        from lerobot.common.robot_devices.motors.configs import DynamixelMotorsBusConfig
-        from lerobot.common.robot_devices.motors.dynamixel import (
-            MODEL_BAUDRATE_TABLE,
-            X_SERIES_BAUDRATE_TABLE,
-            DynamixelMotorsBus,
-        )
-
-        return DynamixelMotorsBusConfig, DynamixelMotorsBus, MODEL_BAUDRATE_TABLE, X_SERIES_BAUDRATE_TABLE
-
     else:
         raise ValueError(
             f"Currently we do not support this motor brand: {brand}. We currently support feetech and dynamixel motors."

@@ -5,7 +5,7 @@ from pathlib import Path
 import draccus
 
 from lerobot.common.robot_devices.robots.configs import RobotConfig
-from lerobot.configs import parser
+from lerobot.configs import parser_dips
 from lerobot.configs.policies import PreTrainedConfig
 import logging
 from lerobot.common.utils.utils import (
@@ -120,7 +120,10 @@ class ControlPipelineConfig:
     control: ControlConfig
 
     def __post_init__(self):
-        print(f"Initialized ControlPipelineConfig with robot={self.robot}, control={self.control}")
+        # Set the logging level to INFO
+        logging.getLogger().setLevel(logging.INFO)
+        # Log the configuration
+        logging.info(f"ControlPipelineConfig initialized with robot: {self.robot}, control: {self.control}")
 
     @classmethod
     def __get_path_fields__(cls) -> list[str]:

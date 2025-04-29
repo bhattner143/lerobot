@@ -1,16 +1,4 @@
-# Copyright 2024 The HuggingFace Inc. team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# -*- coding: utf-8 -*-
 
 import enum
 import logging
@@ -21,6 +9,9 @@ from copy import deepcopy
 
 import numpy as np
 import tqdm
+import logging
+
+from termcolor import colored
 
 from lerobot.common.robot_devices.motors.configs import FeetechMotorsBusConfig
 from lerobot.common.robot_devices.utils import RobotDeviceAlreadyConnectedError, RobotDeviceNotConnectedError
@@ -306,6 +297,8 @@ class FeetechMotorsBus:
 
         self.track_positions = {}
 
+        logging.info(colored(f"FeetechMotorsBus initialized with port: {self.port}", "yellow", attrs=["bold"])) 
+
     def connect(self):
         if self.is_connected:
             raise RobotDeviceAlreadyConnectedError(
@@ -459,6 +452,14 @@ class FeetechMotorsBus:
                 # universal float32 centered degree range ]-180, 180[
                 values[i] = values[i] / (resolution // 2) * HALF_TURN_DEGREE
 
+                logging.info(
+                    colored(
+                        f"Motor {name} --> {values[i]} with homing_offset {homing_offset} and resolution {resolution}",
+                        "yellow",
+                        attrs=["bold"],
+                    )
+                )
+
                 if (values[i] < LOWER_BOUND_DEGREE) or (values[i] > UPPER_BOUND_DEGREE):
                     raise JointOutOfRangeError(
                         f"Wrong motor position range detected for {name}. "
@@ -476,6 +477,10 @@ class FeetechMotorsBus:
                 # Rescale the present position to a nominal range [0, 100] %,
                 # useful for joints with linear motions like Aloha gripper
                 values[i] = (values[i] - start_pos) / (end_pos - start_pos) * 100
+
+                logging.info(colored(f"Motor {name} --> {values[i]} with start_pos {start_pos} and end_pos {end_pos}", 
+                            "yellow", attrs=["bold"]))
+
 
                 if (values[i] < LOWER_BOUND_LINEAR) or (values[i] > UPPER_BOUND_LINEAR):
                     raise JointOutOfRangeError(
