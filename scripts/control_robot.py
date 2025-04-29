@@ -65,7 +65,7 @@ def calibrate(robot: Robot, cfg: CalibrateControlConfig):
         raise ValueError(
             f"Unknown arms provided ('{unknown_arms_str}'). Available arms are `{available_arms_str}`."
         )
-
+    #
     for arm_id in arms:
         arm_calib_path = robot.calibration_dir / f"{arm_id}.json"
         if arm_calib_path.exists():
@@ -76,16 +76,6 @@ def calibrate(robot: Robot, cfg: CalibrateControlConfig):
 
     if robot.is_connected:
         robot.disconnect()
-
-    if robot.robot_type.startswith("lekiwi") and "main_follower" in arms:
-        print("Calibrating only the lekiwi follower arm 'main_follower'...")
-        robot.calibrate_follower()
-        return
-
-    if robot.robot_type.startswith("lekiwi") and "main_leader" in arms:
-        print("Calibrating only the lekiwi leader arm 'main_leader'...")
-        robot.calibrate_leader()
-        return
 
     # Calling `connect` automatically runs calibration
     # when the calibration file is missing
@@ -273,9 +263,9 @@ def control_robot(cfg: ControlPipelineConfig):
     init_logging()
     logging.info(pformat(asdict(cfg)))
 
+    # Takes the robot configuration and creates the robot
     robot = make_robot_from_config(cfg.robot)
 
-    # TODO(Steven): Blueprint for fixed window size
 
     # Check the type of control configuration and execute the corresponding control mode
     if isinstance(cfg.control, CalibrateControlConfig):
