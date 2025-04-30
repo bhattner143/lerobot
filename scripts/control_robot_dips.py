@@ -57,7 +57,7 @@ from lerobot.common.robot_devices.control_utils import (  # Utility functions fo
 from lerobot.common.robot_devices.robots.utils import Robot, make_robot_from_config  # Robot utilities
 from lerobot.common.robot_devices.utils import busy_wait, safe_disconnect  # Utility functions for robot devices
 from lerobot.common.utils.utils import has_method, init_logging, log_say  # General utility functions
-from lerobot.configs import parser  # Configuration parser
+from lerobot.configs import parser_dips  # Configuration parser
 
 ########################################################################################
 # Control modes
@@ -65,13 +65,6 @@ from lerobot.configs import parser  # Configuration parser
 
 @safe_disconnect  # Ensures the robot disconnects safely in case of an error
 def calibrate(robot: Robot, cfg: CalibrateControlConfig):
-    # TODO: Move this code into the robot's classes for better encapsulation
-    if robot.robot_type.startswith("stretch"):  # Special handling for "stretch" robots
-        if not robot.is_connected:  # Connect the robot if not already connected
-            robot.connect()
-        if not robot.is_homed():  # Home the robot if it hasn't been homed
-            robot.home()
-        return
 
     arms = robot.available_arms if cfg.arms is None else cfg.arms  # Determine which arms to calibrate
     unknown_arms = [arm_id for arm_id in arms if arm_id not in robot.available_arms]  # Check for invalid arms

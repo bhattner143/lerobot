@@ -15,7 +15,7 @@ from huggingface_hub.errors import HfHubHTTPError  # For handling HuggingFace Hu
 from lerobot.common.optim import OptimizerConfig  # Optimizer configuration
 from lerobot.common.optim.schedulers import LRSchedulerConfig  # Scheduler configuration
 from lerobot.common.utils.hub import HubMixin  # Mixin for HuggingFace Hub integration
-from lerobot.configs import parser  # Command-line argument parser
+from lerobot.configs import parser_dips  # Command-line argument parser
 from lerobot.configs.default import DatasetConfig, EvalConfig, WandBConfig  # Default configurations
 from lerobot.configs.policies import PreTrainedConfig  # Pre-trained policy configuration
 

@@ -277,48 +277,48 @@ class RemoteManipulatorRobot:
 
         self.is_connected = True
 
-    def activate_calibration(self):
-        """After calibration all motors function in human interpretable ranges.
-        Rotations are expressed in degrees in nominal range of [-180, 180],
-        and linear motions (like gripper of Aloha) in nominal range of [0, 100].
-        """
+    # def activate_calibration(self):
+    #     """After calibration all motors function in human interpretable ranges.
+    #     Rotations are expressed in degrees in nominal range of [-180, 180],
+    #     and linear motions (like gripper of Aloha) in nominal range of [0, 100].
+    #     """
 
-        def load_or_run_calibration_(name, arm, arm_type):
-            arm_id = get_arm_id(name, arm_type)
-            arm_calib_path = self.calibration_dir / f"{arm_id}.json"
+    #     def load_or_run_calibration_(name, arm, arm_type):
+    #         arm_id = get_arm_id(name, arm_type)
+    #         arm_calib_path = self.calibration_dir / f"{arm_id}.json"
 
-            if arm_calib_path.exists():
-                with open(arm_calib_path) as f:
-                    calibration = json.load(f)
-            else:
-                # TODO(rcadene): display a warning in __init__ if calibration file not available
-                print(f"Missing calibration file '{arm_calib_path}'")
+    #         if arm_calib_path.exists():
+    #             with open(arm_calib_path) as f:
+    #                 calibration = json.load(f)
+    #         else:
+    #             # TODO(rcadene): display a warning in __init__ if calibration file not available
+    #             print(f"Missing calibration file '{arm_calib_path}'")
 
-                if self.robot_type in ["koch", "koch_bimanual", "aloha"]:
-                    from lerobot.common.robot_devices.robots.dynamixel_calibration import run_arm_calibration
+    #             if self.robot_type in ["koch", "koch_bimanual", "aloha"]:
+    #                 from lerobot.common.robot_devices.robots.dynamixel_calibration import run_arm_calibration
 
-                    calibration = run_arm_calibration(arm, self.robot_type, name, arm_type)
+    #                 calibration = run_arm_calibration(arm, self.robot_type, name, arm_type)
 
-                elif self.robot_type in ["so100", "moss", "lekiwi"]:
-                    from lerobot.common.robot_devices.robots.feetech_calibration import (
-                        run_arm_manual_calibration,
-                    )
+    #             elif self.robot_type in ["so100", "moss", "lekiwi"]:
+    #                 from lerobot.common.robot_devices.robots.feetech_calibration import (
+    #                     run_arm_manual_calibration,
+    #                 )
 
-                    calibration = run_arm_manual_calibration(arm, self.robot_type, name, arm_type)
+    #                 calibration = run_arm_manual_calibration(arm, self.robot_type, name, arm_type)
 
-                print(f"Calibration is done! Saving calibration file '{arm_calib_path}'")
-                arm_calib_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(arm_calib_path, "w") as f:
-                    json.dump(calibration, f)
+    #             print(f"Calibration is done! Saving calibration file '{arm_calib_path}'")
+    #             arm_calib_path.parent.mkdir(parents=True, exist_ok=True)
+    #             with open(arm_calib_path, "w") as f:
+    #                 json.dump(calibration, f)
 
-            return calibration
+    #         return calibration
 
-        for name, arm in self.follower_arms.items():
-            calibration = load_or_run_calibration_(name, arm, "follower")
-            arm.set_calibration(calibration)
-        for name, arm in self.leader_arms.items():
-            calibration = load_or_run_calibration_(name, arm, "leader")
-            arm.set_calibration(calibration)
+    #     for name, arm in self.follower_arms.items():
+    #         calibration = load_or_run_calibration_(name, arm, "follower")
+    #         arm.set_calibration(calibration)
+    #     for name, arm in self.leader_arms.items():
+    #         calibration = load_or_run_calibration_(name, arm, "leader")
+    #         arm.set_calibration(calibration)
 
     # def set_koch_robot_preset(self):
     #     def set_operating_mode_(arm):

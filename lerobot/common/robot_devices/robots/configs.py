@@ -37,9 +37,9 @@ class RobotConfig(draccus.ChoiceRegistry, abc.ABC):
 # Intermediate abstract class
 @dataclass
 class ManipulatorRobotConfig(RobotConfig):
-    leader_arms: dict[str, MotorsBusConfig] = field(default_factory=lambda: {})
+    leader_arms: dict[str, MotorsBusConfig]   = field(default_factory=lambda: {})
     follower_arms: dict[str, MotorsBusConfig] = field(default_factory=lambda: {})
-    cameras: dict[str, CameraConfig] = field(default_factory=lambda: {})
+    cameras: dict[str, CameraConfig]          = field(default_factory=lambda: {})
 
     # Optionally limit the magnitude of the relative positional target vector for safety purposes.
     # Set this to a positive scalar to have the same value for all motors, or a list that is the same length
@@ -219,3 +219,8 @@ class DensoRobotConfig(ManipulatorRobotConfig):
     mock: bool = False
 
 
+if __name__ == "__main__":
+
+    # Example usage
+    robot_config = So100RobotConfig()
+    print(robot_config)

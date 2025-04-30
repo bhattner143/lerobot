@@ -76,7 +76,7 @@ from lerobot.common.utils.utils import (
     init_logging,
     inside_slurm,
 )
-from lerobot.configs import parser
+from lerobot.configs import parser_dips
 from lerobot.configs.eval import EvalPipelineConfig
 
 
@@ -456,7 +456,7 @@ def _compile_episode_data(
     return data_dict
 
 
-@parser.wrap()
+@parser_dips.wrap()
 def eval_main(cfg: EvalPipelineConfig):
     logging.info(pformat(asdict(cfg)))
 

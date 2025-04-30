@@ -92,9 +92,9 @@ class RecordControlConfig(ControlConfig):
     def __post_init__(self):
         print(f"Initialized RecordControlConfig with repo_id={self.repo_id}, single_task={self.single_task}")
         # HACK: We parse again the cli args here to get the pretrained path if there was one.
-        policy_path = parser.get_path_arg("control.policy")
+        policy_path = parser_dips.get_path_arg("control.policy")
         if policy_path:
-            cli_overrides = parser.get_cli_overrides("control.policy")
+            cli_overrides = parser_dips.get_cli_overrides("control.policy")
             self.policy = PreTrainedConfig.from_pretrained(policy_path, cli_overrides=cli_overrides)
             self.policy.pretrained_path = policy_path
 

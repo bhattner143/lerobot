@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from lerobot.common import policies  # noqa: F401
-from lerobot.configs import parser
+from lerobot.configs import parser_dips
 from lerobot.configs.default import EvalConfig
 from lerobot.configs.policies import PreTrainedConfig
 

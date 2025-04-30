@@ -238,10 +238,12 @@ class ManipulatorRobot:
             print(f"Connecting {name} leader arm.")
             self.leader_arms[name].connect()
 
-        if self.robot_type in ["koch", "koch_bimanual", "aloha"]:
-            from lerobot.common.robot_devices.motors.dynamixel import TorqueMode
-        elif self.robot_type in ["so100", "moss", "lekiwi"]:
+        if self.robot_type in ["so100", "denso"]:
             from lerobot.common.robot_devices.motors.feetech import TorqueMode
+        else:
+            raise NotImplementedError(
+                f"Robot type {self.robot_type} is not supported. Please implement the connection logic."
+            )
 
         # We assume that at connection time, arms are in a rest position, and torque can
         # be safely disabled to run calibration and/or set robot preset configurations.
@@ -253,11 +255,7 @@ class ManipulatorRobot:
         self.activate_calibration()
 
         # Set robot preset (e.g. torque in leader gripper for Koch v1.1)
-        if self.robot_type in ["koch", "koch_bimanual"]:
-            self.set_koch_robot_preset()
-        elif self.robot_type == "aloha":
-            self.set_aloha_robot_preset()
-        elif self.robot_type in ["so100", "moss", "lekiwi"]:
+        if self.robot_type in ["so100", "denso"]:
             self.set_so100_robot_preset()
 
         # Enable torque on all motors of the follower arms
@@ -532,3 +530,29 @@ class ManipulatorRobot:
     def __del__(self):
         if getattr(self, "is_connected", False):
             self.disconnect()
+
+#####EXAMPLE TESTING######
+if __name__ == "__main__":
+    # Example usage
+    # Example usage
+    #Generate a config for the robot
+    import logging
+    from lerobot.common.robot_devices.robots.configs import So100RobotConfig, DensoRobotConfig
+    robot_config = DensoRobotConfig()
+    print(robot_config)
+
+    #Generate a robot from the config
+    robot = ManipulatorRobot(robot_config)
+    print(robot)
+    # Connect the robot
+    robot.connect()
+    try:
+        while True:
+            observation, action = robot.teleop_step(record_data=True)
+            print(f"[INFO] Observation (Joint): {observation['observation.state']}")
+            print(f"[INFO] Observation (PCD): {observation['observation.images.pcd_intel_real_sense'].shape}")
+            print(f"[INFO] Observation (RGB): {observation['observation.images.rgb_intel_real_sense'].shape}")
+            print(f"[INFO] Action: {action}")
+    except KeyboardInterrupt:
+        print("Teleoperation interrupted by user.")
+        robot.disconnect()

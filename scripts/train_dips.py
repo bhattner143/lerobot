@@ -36,13 +36,8 @@ from lerobot.common.utils.utils import (
 from lerobot.common.utils.wandb_utils import WandBLogger
 from lerobot.configs import parser_dips
 from lerobot.configs.train import TrainPipelineConfig
-from lerobot.scripts.eval import eval_policy
-import argparse
-from pathlib import Path
+from scripts.eval import eval_policy
 
-from typing import Sequence
-import sys
-import cv2
 import numpy as np
 
 def update_policy(
