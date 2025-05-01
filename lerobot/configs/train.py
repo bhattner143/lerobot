@@ -80,15 +80,15 @@ class TrainPipelineConfig(HubMixin):
         1. Check if the dataset is set.
         """
         # Parse command-line arguments for the policy path
-        policy_path = parser.get_path_arg("policy")
+        policy_path = parser_dips.get_path_arg("policy")
         if policy_path:
             # Load the policy configuration from the specified path
-            cli_overrides = parser.get_cli_overrides("policy")
+            cli_overrides = parser_dips.get_cli_overrides("policy")
             self.policy = PreTrainedConfig.from_pretrained(policy_path, cli_overrides=cli_overrides)
             self.policy.pretrained_path = policy_path
         elif self.resume:
             # Handle resuming a previous training run
-            config_path = parser.parse_arg("config_path")
+            config_path = parser_dips.parse_arg("config_path")
             if not config_path:
                 raise ValueError(
                     f"A config_path is expected when resuming a run. Please specify path to {TRAIN_CONFIG_NAME}"

@@ -1,0 +1,19 @@
+# camera
+w_rgb: 1920
+h_rgb: 1080
+w_depth: 1024
+h_depth: 768
+desired_exposure: 50
+desired_white_balance: 5600
+desired_gain: 50
+deci_ratio: 6
+
+# mesh
+name_cloth: "t_shirt_l3"
+checkpoint: "finalbestmodel_0299_0.01162.pt"
+
+# visualization
+vis_pcl: True
+vis_mask: False
+vis_depth: True
+vis_mesh: False
