@@ -36,7 +36,7 @@ from lerobot.common.utils.utils import (
 from lerobot.common.utils.wandb_utils import WandBLogger
 from lerobot.configs import parser_dips
 from lerobot.configs.train import TrainPipelineConfig
-from scripts.eval import eval_policy
+# from scripts.eval import eval_policy
 
 import numpy as np
 

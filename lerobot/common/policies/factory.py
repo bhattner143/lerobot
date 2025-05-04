@@ -13,9 +13,10 @@ from lerobot.common.policies.diffusion.configuration_diffusion import DiffusionC
 from lerobot.common.policies.pi0.configuration_pi0 import PI0Config
 from lerobot.common.policies.pi0fast.configuration_pi0fast import PI0FASTConfig
 from lerobot.common.policies.act_advanced.configuration_act_advanced import ACTConfigAdvanced #My addition
+from lerobot.common.policies.act_mesh_gat.configuration_act_mesh_gat import ACTMeshGATConfig#My addition
 from lerobot.common.policies.pretrained import PreTrainedPolicy
-from lerobot.common.policies.tdmpc.configuration_tdmpc import TDMPCConfig
-from lerobot.common.policies.vqbet.configuration_vqbet import VQBeTConfig
+# from lerobot.common.policies.tdmpc.configuration_tdmpc import TDMPCConfig
+# from lerobot.common.policies.vqbet.configuration_vqbet import VQBeTConfig
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.types import FeatureType
 
@@ -52,6 +53,11 @@ def get_policy_class(name: str) -> PreTrainedPolicy:
 
         return ACTPolicyAdvanced
     
+    elif name == "act_mesh_gat":
+        from lerobot.common.policies.act_mesh_gat.modeling_act_mesh_gat import ACTMeshGATPolicy
+
+        return ACTMeshGATPolicy
+    
     else:
         raise NotImplementedError(f"Policy with name {name} is not implemented.")
 
@@ -71,6 +77,8 @@ def make_policy_config(policy_type: str, **kwargs) -> PreTrainedConfig:
         return PI0FASTConfig(**kwargs)
     # elif policy_type == "act_advanced":
     #     return ACTConfigAdvanced(**kwargs)
+    elif policy_type == "act_mesh_gat":
+        return ACTMeshGATConfig(**kwargs)
     else:
         raise ValueError(f"Policy type '{policy_type}' is not available.")
 

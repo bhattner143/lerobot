@@ -6,6 +6,7 @@ from argparse import ArgumentError
 from typing import Sequence
 
 import draccus
+from pathlib import Path
 
 # Constants for argument parsing
 PATH_KEY = "path"  # Key used to identify path-related arguments
@@ -229,3 +230,13 @@ def filter_path_args(fields_to_filter: str | list[str], args: Sequence[str] | No
             filtered_args = [arg for arg in filtered_args if not arg.startswith(f"--{field}.")]
 
     return filtered_args
+
+def convert_paths_to_str(obj):
+    if isinstance(obj, dict):
+        return {k: convert_paths_to_str(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_paths_to_str(i) for i in obj]
+    elif isinstance(obj, Path):
+        return str(obj)
+    else:
+        return obj

@@ -99,23 +99,24 @@ def wrap(config_path: Path | None = None): ## <- accepts arguments
             
                     
                     if save_config_train_arg:
-
+                        # Convert all Path objects in the configuration to strings
+                        cfg_dict_without_path_obj = convert_paths_to_str(cfg_dict)
                         # Save the configuration as a JSON file
-                        save_path_json = Path(f"/home/dips/Documents/{cfg.dataset.repo_id}/meta/config_train.json")
-                        if save_path_json.exists():
-                            raise FileExistsError(f"The file {save_path_json} already exists. Cannot overwrite.")
+                        save_path_json = Path(f"/home/dips/Documents/{cfg.dataset.repo_id}/meta/config_train_all.json")
+                        # if save_path_json.exists():
+                        #     raise FileExistsError(f"The file {save_path_json} already exists. Cannot overwrite.")
                         with open(save_path_json, "w") as f:
-                            json.dump(cfg_dict, f, indent=4)
+                            json.dump(cfg_dict_without_path_obj, f, indent=4)
 
-                        # Convert the parsed config to an OmegaConf object
-                        cfg_omegaconf = OmegaConf.create(cfg_dict)
+                        # # Convert the parsed config to an OmegaConf object
+                        # cfg_omegaconf = OmegaConf.create(cfg_dict)
 
-                        # Save the OmegaConf object to a YAML file
-                        save_path_yaml = Path(f"/home/dips/Documents/{cfg.dataset.repo_id}/meta/config_train.yaml")
-                        if save_path_yaml.exists():
-                            raise FileExistsError(f"The file {save_path_yaml} already exists. Cannot overwrite.")
-                        with open(save_path_yaml, "w") as f:
-                            OmegaConf.save(cfg_omegaconf, f)
+                        # # Save the OmegaConf object to a YAML file
+                        # save_path_yaml = Path(f"/home/dips/Documents/{cfg.dataset.repo_id}/meta/config_train.yaml")
+                        # if save_path_yaml.exists():
+                        #     raise FileExistsError(f"The file {save_path_yaml} already exists. Cannot overwrite.")
+                        # with open(save_path_yaml, "w") as f:
+                        #     OmegaConf.save(cfg_omegaconf, f)
 
                 # Call the wrapped function with the parsed config and remaining arguments
                 response = fn(cfg, *args, **kwargs)

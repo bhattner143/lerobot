@@ -1,16 +1,4 @@
-# Copyright 2024 The HuggingFace Inc. team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# -*- coding: utf-8 -*-
 import abc
 import logging
 import os
@@ -19,13 +7,10 @@ from pathlib import Path
 from typing import Type, TypeVar
 
 import draccus
-from huggingface_hub import hf_hub_download
-from huggingface_hub.constants import CONFIG_NAME
-from huggingface_hub.errors import HfHubHTTPError
 
 from lerobot.common.optim.optimizers import OptimizerConfig
 from lerobot.common.optim.schedulers import LRSchedulerConfig
-from lerobot.common.utils.hub import HubMixin
+
 from lerobot.common.utils.utils import auto_select_torch_device, is_amp_available, is_torch_device_available
 from lerobot.configs.types import FeatureType, NormalizationMode, PolicyFeature
 
@@ -40,7 +25,7 @@ T = TypeVar("T", bound="PreTrainedConfig")
 # (e.g., policies, models, optimizers) need to be dynamically selected and instantiated 
 # at runtime based on user input, such as command-line arguments or configuration files.
 @dataclass
-class PreTrainedConfig(draccus.ChoiceRegistry, HubMixin, abc.ABC):
+class PreTrainedConfig(draccus.ChoiceRegistry, abc.ABC):
     """
     This is the base class for all policy configurations. 
     It defines the common structure and behavior for policy configurations, 
@@ -56,7 +41,6 @@ class PreTrainedConfig(draccus.ChoiceRegistry, HubMixin, abc.ABC):
         output_normalization_modes: Similar dictionary as `input_normalization_modes`, but to unnormalize to
             the original scale.
     """
-
     n_obs_steps: int = 1
     normalization_mapping: dict[str, NormalizationMode] = field(default_factory=dict)
 
@@ -88,29 +72,6 @@ class PreTrainedConfig(draccus.ChoiceRegistry, HubMixin, abc.ABC):
     def type(self) -> str:
         return self.get_choice_name(self.__class__)
 
-    @abc.abstractproperty
-    def observation_delta_indices(self) -> list | None:
-        raise NotImplementedError
-
-    @abc.abstractproperty
-    def action_delta_indices(self) -> list | None:
-        raise NotImplementedError
-
-    @abc.abstractproperty
-    def reward_delta_indices(self) -> list | None:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def get_optimizer_preset(self) -> OptimizerConfig:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def get_scheduler_preset(self) -> LRSchedulerConfig | None:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def validate_features(self) -> None:
-        raise NotImplementedError
 
     @property
     def robot_state_feature(self) -> PolicyFeature | None:
@@ -145,14 +106,14 @@ class PreTrainedConfig(draccus.ChoiceRegistry, HubMixin, abc.ABC):
     def from_pretrained(
         cls: Type[T],
         pretrained_name_or_path: str | Path,
-        *,
-        force_download: bool = False,
-        resume_download: bool = None,
-        proxies: dict | None = None,
-        token: str | bool | None = None,
-        cache_dir: str | Path | None = None,
-        local_files_only: bool = False,
-        revision: str | None = None,
+        # *,
+        # force_download: bool = False,
+        # resume_download: bool = None,
+        # proxies: dict | None = None,
+        # token: str | bool | None = None,
+        # cache_dir: str | Path | None = None,
+        # local_files_only: bool = False,
+        # revision: str | None = None,
         **policy_kwargs,
     ) -> T:
         model_id = str(pretrained_name_or_path)

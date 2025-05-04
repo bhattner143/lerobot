@@ -18,6 +18,7 @@ from lerobot.common.utils.hub import HubMixin  # Mixin for HuggingFace Hub integ
 from lerobot.configs import parser_dips  # Command-line argument parser
 from lerobot.configs.default import DatasetConfig, EvalConfig, WandBConfig  # Default configurations
 from lerobot.configs.policies import PreTrainedConfig  # Pre-trained policy configuration
+# from lerobot.common.models_cloth.clothmodel_configs import PreTrainedModelConfig  # Pre-trained model configuration
 
 import logging
 from termcolor import colored
@@ -34,6 +35,8 @@ class TrainPipelineConfig(HubMixin):
     # env: envs.EnvConfig | None = None
     # Pre-trained policy configuration (optional)
     policy: PreTrainedConfig | None = None
+    #
+    # cloth_model: PreTrainedModelConfig | None = None
     # Directory to save all outputs of the training run
     output_dir: Path | None = None
     # Name of the training job
@@ -146,39 +149,39 @@ class TrainPipelineConfig(HubMixin):
         with open(save_directory / TRAIN_CONFIG_NAME, "w") as f, draccus.config_type("json"):
             draccus.dump(self, f, indent=4)
 
-    # Load a configuration from a pre-trained model or file
-    @classmethod
-    def from_pretrained(
-        cls: Type["TrainPipelineConfig"],
-        pretrained_name_or_path: str | Path,
-        *,
-        force_download: bool = False,
-        resume_download: bool = None,
-        proxies: dict | None = None,
-        token: str | bool | None = None,
-        cache_dir: str | Path | None = None,
-        local_files_only: bool = False,
-        revision: str | None = None,
-        **kwargs,
-    ) -> "TrainPipelineConfig":
-        # Handle different input types for the pre-trained configuration
-        model_id = str(pretrained_name_or_path)
-        config_file: str | None = None
-        if Path(model_id).is_dir():
-            # Check if the configuration file exists in the directory
-            if TRAIN_CONFIG_NAME in os.listdir(model_id):
-                config_file = os.path.join(model_id, TRAIN_CONFIG_NAME)
-            else:
-                print(f"{TRAIN_CONFIG_NAME} not found in {Path(model_id).resolve()}")
-        elif Path(model_id).is_file():
-            # Use the provided file path
-            config_file = model_id
-        else:
-            Exception(f"File {config_file} not found")
+    # # Load a configuration from a pre-trained model or file
+    # @classmethod
+    # def from_pretrained(
+    #     cls: Type["TrainPipelineConfig"],
+    #     pretrained_name_or_path: str | Path,
+    #     *,
+    #     force_download: bool = False,
+    #     resume_download: bool = None,
+    #     proxies: dict | None = None,
+    #     token: str | bool | None = None,
+    #     cache_dir: str | Path | None = None,
+    #     local_files_only: bool = False,
+    #     revision: str | None = None,
+    #     **kwargs,
+    # ) -> "TrainPipelineConfig":
+    #     # Handle different input types for the pre-trained configuration
+    #     model_id = str(pretrained_name_or_path)
+    #     config_file: str | None = None
+    #     if Path(model_id).is_dir():
+    #         # Check if the configuration file exists in the directory
+    #         if TRAIN_CONFIG_NAME in os.listdir(model_id):
+    #             config_file = os.path.join(model_id, TRAIN_CONFIG_NAME)
+    #         else:
+    #             print(f"{TRAIN_CONFIG_NAME} not found in {Path(model_id).resolve()}")
+    #     elif Path(model_id).is_file():
+    #         # Use the provided file path
+    #         config_file = model_id
+    #     else:
+    #         Exception(f"File {config_file} not found")
 
-        # Parse the configuration file with optional command-line arguments
-        cli_args = kwargs.pop("cli_args", [])
-        cfg      = draccus.parse(cls, config_file, args=cli_args)
+    #     # Parse the configuration file with optional command-line arguments
+    #     cli_args = kwargs.pop("cli_args", [])
+    #     cfg      = draccus.parse(cls, config_file, args=cli_args)
 
-        return cfg
+    #     return cfg
     

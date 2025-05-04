@@ -1,16 +1,4 @@
-# Copyright 2024 The HuggingFace Inc. team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+
 import abc
 import logging
 import os
@@ -79,13 +67,13 @@ class PreTrainedPolicy(nn.Module, HubMixin, abc.ABC):
         pretrained_name_or_path: str | Path,
         *,
         config: PreTrainedConfig | None = None,
-        force_download: bool = False,
-        resume_download: bool | None = None,
-        proxies: dict | None = None,
-        token: str | bool | None = None,
-        cache_dir: str | Path | None = None,
-        local_files_only: bool = False,
-        revision: str | None = None,
+        # force_download: bool = False,
+        # resume_download: bool | None = None,
+        # proxies: dict | None = None,
+        # token: str | bool | None = None,
+        # cache_dir: str | Path | None = None,
+        # local_files_only: bool = False,
+        # revision: str | None = None,
         strict: bool = False,
         **kwargs,
     ) -> T:
@@ -96,59 +84,67 @@ class PreTrainedPolicy(nn.Module, HubMixin, abc.ABC):
         if config is None:
             config = PreTrainedConfig.from_pretrained(
                 pretrained_name_or_path=pretrained_name_or_path,
-                force_download=force_download,
-                resume_download=resume_download,
-                proxies=proxies,
-                token=token,
-                cache_dir=cache_dir,
-                local_files_only=local_files_only,
-                revision=revision,
+                # force_download=force_download,
+                # resume_download=resume_download,
+                # proxies=proxies,
+                # token=token,
+                # cache_dir=cache_dir,
+                # local_files_only=local_files_only,
+                # revision=revision,
                 **kwargs,
             )
         model_id = str(pretrained_name_or_path)
-        instance = cls(config, **kwargs)
+        policy_obj = cls(config, **kwargs)
         if os.path.isdir(model_id):
             print("Loading weights from local directory")
-            model_file = os.path.join(model_id, SAFETENSORS_SINGLE_FILE)
-            policy = cls._load_as_safetensor(instance, model_file, config.device, strict)
+            policy_model_checkpoint_file = os.path.join(model_id, SAFETENSORS_SINGLE_FILE)
+            # Reads the safetensor file, maps the model tensors directly to the policy network
+            safetensors.torch.load_model(policy_obj, policy_model_checkpoint_file, 
+                                                  strict=strict, device=config.device)
+            #Provides the fully loaded policy model after loading the weights
+            policy = policy_obj
         else:
-            try:
-                model_file = hf_hub_download(
-                    repo_id=model_id,
-                    filename=SAFETENSORS_SINGLE_FILE,
-                    revision=revision,
-                    cache_dir=cache_dir,
-                    force_download=force_download,
-                    proxies=proxies,
-                    resume_download=resume_download,
-                    token=token,
-                    local_files_only=local_files_only,
-                )
-                policy = cls._load_as_safetensor(instance, model_file, config.device, strict)
-            except HfHubHTTPError as e:
-                raise FileNotFoundError(
-                    f"{SAFETENSORS_SINGLE_FILE} not found on the HuggingFace Hub in {model_id}"
-                ) from e
+            raise FileNotFoundError(
+                f"Path {model_id} is not a directory. Please provide a valid path to the model directory."
+            )
+        # else:
+        #     try:
+        #         model_file = hf_hub_download(
+        #             repo_id=model_id,
+        #             filename=SAFETENSORS_SINGLE_FILE,
+        #             revision=revision,
+        #             cache_dir=cache_dir,
+        #             force_download=force_download,
+        #             proxies=proxies,
+        #             resume_download=resume_download,
+        #             token=token,
+        #             local_files_only=local_files_only,
+        #         )
+        #         policy = cls._load_as_safetensor(instance, model_file, config.device, strict)
+        #     except HfHubHTTPError as e:
+        #         raise FileNotFoundError(
+        #             f"{SAFETENSORS_SINGLE_FILE} not found on the HuggingFace Hub in {model_id}"
+        #         ) from e
 
         policy.to(config.device)
         policy.eval()
         return policy
 
-    @classmethod
-    def _load_as_safetensor(cls, model: T, model_file: str, map_location: str, strict: bool) -> T:
-        if packaging.version.parse(safetensors.__version__) < packaging.version.parse("0.4.3"):
-            load_model_as_safetensor(model, model_file, strict=strict)
-            if map_location != "cpu":
-                logging.warning(
-                    "Loading model weights on other devices than 'cpu' is not supported natively in your version of safetensors."
-                    " This means that the model is loaded on 'cpu' first and then copied to the device."
-                    " This leads to a slower loading time."
-                    " Please update safetensors to version 0.4.3 or above for improved performance."
-                )
-                model.to(map_location)
-        else:
-            safetensors.torch.load_model(model, model_file, strict=strict, device=map_location)
-        return model
+    # @classmethod
+    # def _load_as_safetensor(cls, model: T, model_file: str, map_location: str, strict: bool) -> T:
+    #     if packaging.version.parse(safetensors.__version__) < packaging.version.parse("0.4.3"):
+    #         load_model_as_safetensor(model, model_file, strict=strict)
+    #         if map_location != "cpu":
+    #             logging.warning(
+    #                 "Loading model weights on other devices than 'cpu' is not supported natively in your version of safetensors."
+    #                 " This means that the model is loaded on 'cpu' first and then copied to the device."
+    #                 " This leads to a slower loading time."
+    #                 " Please update safetensors to version 0.4.3 or above for improved performance."
+    #             )
+    #             model.to(map_location)
+    #     else:
+    #         safetensors.torch.load_model(model, model_file, strict=strict, device=map_location)
+    #     return model
 
     # def generate_model_card(self, *args, **kwargs) -> ModelCard:
     #     card = ModelCard.from_template(
@@ -160,40 +156,40 @@ class PreTrainedPolicy(nn.Module, HubMixin, abc.ABC):
     #     )
     #     return card
 
-    @abc.abstractmethod
-    def get_optim_params(self) -> dict:
-        """
-        Returns the policy-specific parameters dict to be passed on to the optimizer.
-        """
-        raise NotImplementedError
+    # @abc.abstractmethod
+    # def get_optim_params(self) -> dict:
+    #     """
+    #     Returns the policy-specific parameters dict to be passed on to the optimizer.
+    #     """
+    #     raise NotImplementedError
 
-    @abc.abstractmethod
-    def reset(self):
-        """To be called whenever the environment is reset.
+    # @abc.abstractmethod
+    # def reset(self):
+    #     """To be called whenever the environment is reset.
 
-        Does things like clearing caches.
-        """
-        raise NotImplementedError
+    #     Does things like clearing caches.
+    #     """
+    #     raise NotImplementedError
 
-    # TODO(aliberts, rcadene): split into 'forward' and 'compute_loss'?
-    @abc.abstractmethod
-    def forward(self, batch: dict[str, Tensor]) -> tuple[Tensor, dict | None]:
-        """_summary_
+    # # TODO(aliberts, rcadene): split into 'forward' and 'compute_loss'?
+    # @abc.abstractmethod
+    # def forward(self, batch: dict[str, Tensor]) -> tuple[Tensor, dict | None]:
+    #     """_summary_
 
-        Args:
-            batch (dict[str, Tensor]): _description_
+    #     Args:
+    #         batch (dict[str, Tensor]): _description_
 
-        Returns:
-            tuple[Tensor, dict | None]: The loss and potentially other information. Apart from the loss which
-                is a Tensor, all other items should be logging-friendly, native Python types.
-        """
-        raise NotImplementedError
+    #     Returns:
+    #         tuple[Tensor, dict | None]: The loss and potentially other information. Apart from the loss which
+    #             is a Tensor, all other items should be logging-friendly, native Python types.
+    #     """
+    #     raise NotImplementedError
 
-    @abc.abstractmethod
-    def select_action(self, batch: dict[str, Tensor]) -> Tensor:
-        """Return one action to run in the environment (potentially in batch mode).
+    # @abc.abstractmethod
+    # def select_action(self, batch: dict[str, Tensor]) -> Tensor:
+    #     """Return one action to run in the environment (potentially in batch mode).
 
-        When the model uses a history of observations, or outputs a sequence of actions, this method deals
-        with caching.
-        """
-        raise NotImplementedError
+    #     When the model uses a history of observations, or outputs a sequence of actions, this method deals
+    #     with caching.
+    #     """
+    #     raise NotImplementedError

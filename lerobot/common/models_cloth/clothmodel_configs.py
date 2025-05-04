@@ -5,28 +5,43 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Type, TypeVar
-from utils.utils import auto_select_torch_device, is_torch_device_available #Change this to general one which is inside comon folder
+
+try:
+    from utils.utils import auto_select_torch_device, is_torch_device_available #Change this to general one which is inside comon folder
+except ImportError:
+    from lerobot.common.utils.utils import auto_select_torch_device, is_torch_device_available
+
 from enum import Enum
 
 import draccus
 from termcolor import colored
 from omegaconf import OmegaConf
+import argparse
 
-# set current task
-mode = "train" # select mode from 'train', 'test', 'test_real'
-name_cloth = 't_shirt_l3'
-checkpoint_file = '2025-03-28/14-46-38/finalbestmodel_0299_0.01162.pt'
+# ✅ Global constant for dataset root
+DATASET_ROOT = Path("/home/dips/Documents/datasets_lerobot/so100_test/mesh_gat")
 
-# get address
-PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+@dataclass
+class PathConfig:
+    project_dir: Path
+    dataset_dir: Path
+    predict_dir: Path
+    checkpoint_dir: Path
+    checkpoint_file: Path
+    template_dir: Path
 
-DATASET_DIR     = Path(f'/home/dips/Documents/datasets_lerobot/so100_test/mesh_gat/{name_cloth}')
-PREDICT_DIR     = DATASET_DIR / 'predict'
-CHECKPOINT_DIR  = DATASET_DIR / 'checkpoints'
-CHECKPOINT_FILE = CHECKPOINT_DIR / checkpoint_file
-TEMPLATE_DIR    = DATASET_DIR / f'configs/template_{name_cloth}.pickle'
-
-
+    @classmethod
+    def from_dataset(cls, root: Path, name_cloth: str, checkpoint_file_name: str) -> "PathConfig":
+        dataset_dir = root / name_cloth
+        return cls(
+            project_dir=Path(__file__).resolve().parent,
+            dataset_dir=dataset_dir,
+            predict_dir=dataset_dir / "predict",
+            checkpoint_dir=dataset_dir / "checkpoints",
+            checkpoint_file=dataset_dir / "checkpoints" / checkpoint_file_name,
+            template_dir=dataset_dir / f"configs/template_{name_cloth}.pickle",
+        )
+    
 class FeatureType(str, Enum):
     STATE  = "STATE"
     VISUAL = "VISUAL"
@@ -45,22 +60,20 @@ T = TypeVar("T", bound="PreTrainedClothModelConfig")
 class PreTrainedClothModelConfig(draccus.ChoiceRegistry, abc.ABC):
     
     """Base Abstract class for pretrained cloth model configs."""
+    type: str = "base"  # Add the type field with a default value
     input_features: dict[str, ClothModelFeature]  = field(default_factory=dict)
     output_features: dict[str, ClothModelFeature] = field(default_factory=dict)
     
     device: str | None = None  # cuda | cpu | mp
 
-    project_dir: dict = field(default_factory=dict)
-    dataset_dir: dict = field(default_factory=dict)
-    predict_dir: dict = field(default_factory=dict)
-    checkpoint_dir: dict = field(default_factory=dict)
-    checkpoint_file: dict = field(default_factory=dict)
+    path_config: PathConfig | None = None
 
     def __post_init__(self):
         # Set the device to the appropriate one based on the environment
-        if not self.device or not is_torch_device_available(self.device):
-            self.device = auto_select_torch_device()
-            logging.info(f"Device set to {self.device}")
+        # if not self.device or not is_torch_device_available(self.device):
+        #     self.device = auto_select_torch_device()
+        #     logging.info(f"Device set to {self.device}")
+        pass
 
    
     @property
@@ -72,31 +85,80 @@ class PreTrainedClothModelConfig(draccus.ChoiceRegistry, abc.ABC):
         cls: Type[T],
         pretrained_path: str | Path,
         cli_overrides: dict[str, str] | None = None,
+        **kwargs,
     ) -> T:
+        
         model_id = str(pretrained_path)
         config_file: str | None = None
+        
         if Path(model_id).is_dir():
-            # Check if the configuration file exists in the directory
-            if "config.json" in os.listdir(model_id):
-                config_model_file = os.path.join(model_id, "config.json")
+            # Check if the yaml configuration file exists in the directory
+            if "config.yaml" in os.listdir(model_id):
+                # Read the YAML configuration file and save it as a JSON file
+                cls._read_config_yaml_to_save_config_json(Path(model_id))
+
+                #Read the recently saved config.json
+                config_path = Path(pretrained_path/ "config.json")
+                
+                cls.config = draccus.parse(
+                                cls, #Configuration class of the selected model config (E.g. MeshGATConfig)
+                                config_path=config_path,
+                                args = [f"--{key}={value}" for key, value in cli_overrides.items()] # Pass the command
+                                )
+                print(f"Config type: {cls.config.type}")
+                print(cls.config)
+                
+                # Save all the configuration, which includes mesh gan info as cloth_model_config.json using json
+                cls._save_pretrained(pretrained_path)
+                
             else:
-                logging.warning(f"config.json not found in {Path(model_id).resolve()}")
+                logging.warning(f"config.yaml not found in {Path(model_id).resolve()}")
         else:
             raise Exception(f"Path {model_id} is not a directory")
 
-        # Load the configuration using draccus
-        config = draccus.parse(cls, config_path=config_model_file)
+        return cls.config
 
-        # Apply any command-line overrides using draccus
-        if cli_overrides:
-            config = draccus.parse(
-            cls,
-            config_path=config_model_file,
-            args=[f"--{key}={value}" for key, value in cli_overrides.items()]
-            )
+    @classmethod
+    def _read_config_yaml_to_save_config_json(cls, config_dir: str | Path) -> None:
+        """Read the YAML configuration file and return it as a dictionary."""
+        config_file_path = config_dir / "config.yaml"
+        if config_file_path.exists():
+            with open(config_file_path, "r") as f:
+                config_dict = OmegaConf.to_container(OmegaConf.load(f), resolve=True)
+            #Create the directory if it doesn't exist and save the config_dict as "config.json from yaml"
+            config_dir.mkdir(exist_ok=True)
+            with open(config_dir / "config.json", "w") as f:
+                json.dump(config_dict, f)
 
-        return config
+            print(config_dir.resolve())
+        else:
+            raise FileNotFoundError(f"{config_file_path} does not exist.")
+        
+    @staticmethod
+    def _convert_paths_to_str(obj):
+        if isinstance(obj, dict):
+            return {k: PreTrainedClothModelConfig._convert_paths_to_str(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [PreTrainedClothModelConfig._convert_paths_to_str(i) for i in obj]
+        elif isinstance(obj, Path):
+            return str(obj)
+        else:
+            return obj
+        
+    @classmethod
+    def _save_pretrained(cls, save_directory: Path) -> None:
+        """Save the configuration to a file."""
+        cloth_model_config_path = save_directory / "cloth_model_config.json"
+        
+        # Convert to a serializable dictionary and convert any Path objects to strings
+        config_dict = OmegaConf.to_container(OmegaConf.structured(cls.config), resolve=True)
+        serializable_config = cls._convert_paths_to_str(config_dict)
 
+        # Write to JSON file
+        with open(cloth_model_config_path, "w") as f:
+            json.dump(serializable_config, f, indent=4)
+
+        print(colored(f"Configuration saved to {cloth_model_config_path}", "green"))
 
 @PreTrainedClothModelConfig.register_subclass("mesh_gat")
 @dataclass
@@ -104,13 +166,15 @@ class MeshGATConfig(PreTrainedClothModelConfig):
     """Configuration for MeshGAT model."""
     type: str = "mesh_gat"
     mode: str = "eval"
-    name_cloth: str  = name_cloth
-    project_dir: str = field(default_factory=lambda: Path(PROJECT_DIR))
-    dataset_dir: str = field(default_factory=lambda: Path(DATASET_DIR))
-    predict_dir: str = field(default_factory=lambda: Path(PREDICT_DIR))
-    checkpoint_dir: str = field(default_factory=lambda: Path(CHECKPOINT_DIR))
-    checkpoint_file: str = field(default_factory=lambda: Path(CHECKPOINT_FILE))
-    template_dir: str = field(default_factory=lambda: Path(TEMPLATE_DIR))
+    name_cloth: str = field(default_factory=lambda: 't_shirt_l3')
+    checkpoint_file_name: str = "finalbestmodel_0299_0.01162.pt"
+    # device: str | None = None  # cuda | cpu 
+    # project_dir: str = field(default_factory=lambda: Path(PROJECT_DIR))
+    # dataset_dir: str = field(default_factory=lambda: Path(DATASET_DIR))
+    # predict_dir: str = field(default_factory=lambda: Path(PREDICT_DIR))
+    # checkpoint_dir: str = field(default_factory=lambda: Path(CHECKPOINT_DIR))
+    # checkpoint_file: str = field(default_factory=lambda: Path(CHECKPOINT_FILE))
+    # template_dir: str = field(default_factory=lambda: Path(TEMPLATE_DIR))
 
     distributed: bool = False
     # SYSTEM
@@ -150,74 +214,81 @@ class MeshGATConfig(PreTrainedClothModelConfig):
     use_pixel: bool = False
     use_normalize: bool = False
 
+    # ✅ Initialize path config in post init
+    def __post_init__(self):
+        super().__post_init__()
+        if self.path_config is None:
+            dataset_root = DATASET_ROOT
+            self.path_config = PathConfig.from_dataset(
+                dataset_root, self.name_cloth, self.checkpoint_file_name
+            )
 
 
 
 
 # Example usage
 if __name__ == "__main__":
-    # ✅ Create a dummy "config.json" file for testing
-    config_dict = {
-        "type": "mesh_gat",
-        "mode": "eval",
-        "batch_size": 32,
-        "epoch_size": 2000,
-        "image_size": 720,
-        "lr": 1e-4,
-        "schedule_step": 150,
-        "momentum": 0.9,
-        "sample_ratio": 1.0,
-        "save_step": 30,
-        "num_threads": 16,
-        "shuffle": True,
-        "drop_last": False,
-        "store_pred": True,
-        "loss_weights": {
-            "vertex_loss": 1.0,
-            "keypoint_loss": 1.0,
-            "chamfer_loss": 0.5
-        },
-        "use_chamfer": True,
-        "chamfer_active_epoch": 0,
-        "use_pixel": False,
-        "use_normalize": False,
-        "input_features": {
-            "depth_image": {"type": "VISUAL", "shape": [3, 224, 224]}
-        },
-        "output_features": {
-            "mesh": {"type": "STATE", "shape": [3]}
-        }
-    }
-
-    config_dir = DATASET_DIR / "dummy_model"
-    config_dir.mkdir(exist_ok=True)
-    with open(config_dir / "config.json", "w") as f:
-        json.dump(config_dict, f)
     
+    # Create an instance of the MeshGATConfig class
+    mesh_gat_config = MeshGATConfig(
+        mode="train",
+        batch_size=64,
+        lr=1e-3,
+        name_cloth="t_shirt_l3",
+        distributed=True,
+    )
+    
+    print(f"MeshGATConfig instance: {mesh_gat_config}")
+    # #Read the "config.yaml" generated from training the cloth model and create a config_dict
+    config_dir = mesh_gat_config.path_config.dataset_dir/ "configs"
+    config_file_path = config_dir / "config.yaml"
+
+    if config_file_path.exists():
+        with open(config_file_path, "r") as f:
+            config_dict = OmegaConf.to_container(OmegaConf.load(f), resolve=True)
+    else:
+        raise FileNotFoundError(f"{config_file_path} does not exist.")
+    
+    #Convert all the Path objects in the config_dict to strings
+    from pathlib import Path
+    def convert_paths_to_str(obj):
+        if isinstance(obj, dict):
+            return {k: convert_paths_to_str(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_paths_to_str(i) for i in obj]
+        elif isinstance(obj, Path):
+            return str(obj)
+        else:
+            return obj
+
+
+    # Convert paths before dumping
+    serializable_config = convert_paths_to_str(config_dict)
+
+    with open(config_dir / "config.json", "w") as f:
+        json.dump(serializable_config, f, indent=4)
+
     print(config_dir.resolve())
     
-    argtype = PreTrainedClothModelConfig
-
-    config_path = config_dir / "config.json"
     
-    config = draccus.parse(
-                    PreTrainedClothModelConfig,
-                    config_path=config_dir / "config.json",
-                    # args=["--type", "mesh_gat"]  # 👈 passed as CLI override!
-                )
-
-    print(f"Config type: {config.type}")
-    print(config)
-
-    # Save the configuration as eval_config.json using json
-    eval_config_path = config_dir / "eval_config.json"
-    with open(eval_config_path, "w") as f:
-        json.dump(OmegaConf.to_container(OmegaConf.structured(config), resolve=True), f, indent=4)
-    print(colored(f"Configuration saved to {eval_config_path}", "green"))
-
-
-    # Load the configuration using the from_pretrained_cloth_model method
+    # # Parse the type argument from the command line
+    parser = argparse.ArgumentParser(description="Load configuration for cloth model.")
+    parser.add_argument("--cloth_model_type", type=str, default="mesh_gat", help="Type of the cloth model (e.g., mesh_gat).")
+    args = parser.parse_args()
+    
+    # Example of directly calling MeshGATConfig
+    # Load the saved configuration using the from_pretrained_cloth_model method
     pretrained_path = config_dir
-    cli_overrides = {"mode": "train", "batch_size": 64}
+    cli_overrides = {"mode": "train", "batch_size": 64, "type": args.cloth_model_type}
     config = MeshGATConfig.from_pretrained_cloth_model(pretrained_path, cli_overrides=cli_overrides)
     print(f"Loaded config: {config}")
+
+    #Example of slecting MeshGATConfig from the parent calss PreTrainedClothModelConfig
+    # Load the saved configuration using the from_pretrained_cloth_model method
+    pretrained_path = config_dir
+    cli_overrides = {"type": args.cloth_model_type}
+    config = PreTrainedClothModelConfig.from_pretrained_cloth_model(pretrained_path, cli_overrides=cli_overrides)
+    print(f"Loaded config: {config}")
+
+
+    

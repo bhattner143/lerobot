@@ -64,3 +64,11 @@ You are now ready to use Mesh Cloth GAN!
 
 pip install draccus
 pip install termcolor
+
+
+
+pip install datasets
+pip install jsonlines
+pip install safetensors
+pip install imageio
+pip install einops>=0.8.0
