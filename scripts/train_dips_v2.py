@@ -127,7 +127,7 @@ def train(cfg: TrainPipelineConfig):
     """
     #################CREATE AN INSTANCE OF THE POLICY######################
     """
-    # Create the policy (model) based on the configuration and dataset metadata
+    # Create the policy (policy model and mesh GAT model) based on the configuration and dataset metadata
     logging.info("Creating policy")
     policy = make_policy(
         cfg=cfg.policy,

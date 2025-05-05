@@ -20,11 +20,13 @@ from torchvision.models._utils import IntermediateLayerGetter
 from torchvision.ops.misc import FrozenBatchNorm2d
 
 from lerobot.common.policies.act_mesh_gat.configuration_act_mesh_gat import ACTMeshGATConfig
+from lerobot.common.models_cloth.clothmodel_configs import*
+from lerobot.common.models_cloth.factory import get_cloth_model_class, make_cloth_model
 from lerobot.common.policies.normalize import Normalize, Unnormalize
 from lerobot.common.policies.pretrained import PreTrainedPolicy
 
 
-class ACTPolicyAdvanced(PreTrainedPolicy):
+class ACTMeshGATPolicy(PreTrainedPolicy):
 
     config_class = ACTMeshGATConfig
     name = "act"
@@ -32,6 +34,7 @@ class ACTPolicyAdvanced(PreTrainedPolicy):
     def __init__(
         self,
         config: ACTMeshGATConfig,
+        cloth_model_config: PreTrainedClothModelConfig | None = None,
         dataset_stats: dict[str, dict[str, Tensor]] | None = None,
     ):
         """
@@ -52,11 +55,15 @@ class ACTPolicyAdvanced(PreTrainedPolicy):
         self.unnormalize_outputs = Unnormalize(
             config.output_features, config.normalization_mapping, dataset_stats
         )
+        # Generate policy model from the config.
+        self.model = ACTMeshGAT(config)
 
-        self.model = ACTAdvanced(config)
+        # Generate the cloth model if the cloth model config is provided.
+        if config.cloth_model_config is not None:
+            self.cloth_model = make_cloth_model(config.cloth_model_config)
 
         if config.temporal_ensemble_coeff is not None:
-            self.temporal_ensembler = ACTAdvancedTemporalEnsembler(config.temporal_ensemble_coeff, config.chunk_size)
+            self.temporal_ensembler = ACTMeshGATTemporalEnsembler(config.temporal_ensemble_coeff, config.chunk_size)
 
         self.reset()
 
@@ -523,7 +530,7 @@ class ACTMeshGAT(nn.Module):
 class ACTEncoder(nn.Module):
     """Convenience module for running multiple encoder layers, maybe followed by normalization."""
 
-    def __init__(self, config: ACTConfigAdvanced, is_vae_encoder: bool = False):
+    def __init__(self, config: ACTMeshGAT, is_vae_encoder: bool = False):
         super().__init__()
         self.is_vae_encoder = is_vae_encoder
         num_layers = config.n_vae_encoder_layers if self.is_vae_encoder else config.n_encoder_layers
@@ -540,7 +547,7 @@ class ACTEncoder(nn.Module):
 
 
 class ACTEncoderLayer(nn.Module):
-    def __init__(self, config: ACTConfigAdvanced):
+    def __init__(self, config: ACTMeshGAT):
         super().__init__()
         self.self_attn = nn.MultiheadAttention(config.dim_model, config.n_heads, dropout=config.dropout)
 
@@ -579,7 +586,7 @@ class ACTEncoderLayer(nn.Module):
 
 
 class ACTDecoder(nn.Module):
-    def __init__(self, config: ACTConfigAdvanced):
+    def __init__(self, config: ACTMeshGAT):
         """Convenience module for running multiple decoder layers followed by normalization."""
         super().__init__()
         self.layers = nn.ModuleList([ACTDecoderLayer(config) for _ in range(config.n_decoder_layers)])
@@ -602,7 +609,7 @@ class ACTDecoder(nn.Module):
 
 
 class ACTDecoderLayer(nn.Module):
-    def __init__(self, config: ACTConfigAdvanced):
+    def __init__(self, config: ACTMeshGAT):
         super().__init__()
         self.self_attn = nn.MultiheadAttention(config.dim_model, config.n_heads, dropout=config.dropout)
         self.multihead_attn = nn.MultiheadAttention(config.dim_model, config.n_heads, dropout=config.dropout)
@@ -754,3 +761,24 @@ def get_activation_fn(activation: str) -> Callable:
     if activation == "glu":
         return F.glu
     raise RuntimeError(f"activation should be relu/gelu/glu, not {activation}.")
+
+if __name__ == "__main__":
+    # Example usage
+    config = ACTMeshGATConfig(
+        action_feature=torch.randn(10),
+        robot_state_feature=torch.randn(10),
+        env_state_feature=torch.randn(10),
+        image_features=["image"],
+        n_action_steps=5,
+        chunk_size=5,
+        dim_model=128,
+        dim_feedforward=512,
+        n_heads=8,
+        n_encoder_layers=6,
+        n_decoder_layers=6,
+        dropout=0.1,
+        kl_weight=0.01,
+        use_vae=True,
+    )
+    model = ACTMeshGAT(config)
+    print(model)

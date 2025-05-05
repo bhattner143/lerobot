@@ -59,7 +59,7 @@ class FeatureType(str, Enum):
 
 
 @dataclass
-class ClothModelFeature:
+class ClothMeshGATModelFeature:
     type: FeatureType
     shape: tuple
 
@@ -72,8 +72,8 @@ class PreTrainedClothModelConfig(draccus.ChoiceRegistry, abc.ABC):
     
     """Base Abstract class for pretrained cloth model configs."""
     type: str = "base"  # Add the type field with a default value
-    input_features: dict[str, ClothModelFeature]  = field(default_factory=dict)
-    output_features: dict[str, ClothModelFeature] = field(default_factory=dict)
+    input_features: dict[str, ClothMeshGATModelFeature]  = field(default_factory=dict)
+    output_features: dict[str, ClothMeshGATModelFeature] = field(default_factory=dict)
     
     device: str | None = None  # cuda | cpu | mp
 
@@ -284,7 +284,7 @@ if __name__ == "__main__":
         if model_type == "mesh_gat":
             return MeshGATConfig(**kwargs)
         elif model_type == "dummy":
-            return DummyClothModelConfig(**kwargs)
+            return DummyClothMeshGATModelConfig(**kwargs)
         else:
             raise ValueError(f"Unknown cloth model type: {model_type}")
         

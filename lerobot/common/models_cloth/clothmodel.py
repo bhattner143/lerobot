@@ -16,9 +16,10 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 import numpy as np
 import pdb
+import pickle
 
 
-from clothmodel_configs_v2 import PreTrainedClothModelConfig, MeshGATConfig
+from lerobot.common.models_cloth.clothmodel_configs import PreTrainedClothModelConfig, MeshGATConfig
 
 import torch.nn as nn
 import torchvision.models as models
@@ -30,7 +31,7 @@ import logging
 from termcolor import colored
 
 
-from mesh_gat.model import gat_model, resnet_model
+from lerobot.common.models_cloth.mesh_gat.model import gat_model, resnet_model
 
 
 T = TypeVar("T", bound="PreTrainedClothModel")
@@ -62,12 +63,13 @@ class PreTrainedClothModel(nn.Module, abc.ABC):
         pretrained_path: str | Path,
         *, #ARguments passed after these must be passed as keyword arguments
         config: PreTrainedClothModelConfig| None = None,
-        cli_overrides: dict[str, str] | None = None,
         strict: bool = True,
         **kwargs,
         ) -> T:
-
+        #if config is not passed then generate it from the pretrained_path
         if config is None:
+            # TODO: Fix this to parse the model type from command line
+            cli_overrides = {"type": "mesh_gat"}  # Default or replace with actual argument parsing if available
             config = PreTrainedClothModelConfig.from_pretrained_cloth_model(pretrained_path,
                                                                             cli_overrides=cli_overrides,
                                                                             **kwargs
@@ -76,7 +78,7 @@ class PreTrainedClothModel(nn.Module, abc.ABC):
         cloth_model_id = str(pretrained_path)
 
         #Load the template mesh information and create the cloth model object
-        template_info = pickle.load(open(config.template_dir, mode='rb'))
+        template_info = pickle.load(open(config.path_config.template_dir, mode='rb'))
         kwargs['template_info'] = template_info
         model_obj= cls(config, **kwargs)
 
@@ -85,7 +87,7 @@ class PreTrainedClothModel(nn.Module, abc.ABC):
         if os.path.isdir(cloth_model_id):
             logging.info(colored("Loading pretrained cloth model weights from directory", "yellow"))
             #Get the model file
-            model_checkpoint_file = config.checkpoint_file
+            model_checkpoint_file = config.path_config.checkpoint_file
             # Load the cloth model with the specified file
             model_checkpoint  = torch.load(model_checkpoint_file, weights_only=strict)
             
@@ -155,7 +157,7 @@ class PreTrainedClothModel(nn.Module, abc.ABC):
 
 
 
-class ClothModel(PreTrainedClothModel):
+class ClothMeshGATModel(PreTrainedClothModel):
     """
         Template-based Mass-spring Cloth GNN
     """
@@ -171,7 +173,10 @@ class ClothModel(PreTrainedClothModel):
 
         # init template_info
         if template_info is None:
-            template_info = pickle.load(open(config.template_dir, mode='rb'))
+            if not os.path.exists(config.path_config.template_dir):
+                raise FileNotFoundError(f"Template file not found: {config.path_config.template_dir}")
+            with open(config.path_config.template_dir, mode='rb') as f:
+                template_info = pickle.load(f)
         
         self.template_info = template_info
         self.template_mesh_pos = self.template_info['mesh_pos']
@@ -262,45 +267,42 @@ def predict(config, model, input_data):
 if __name__ == "__main__":
     import json
     import argparse
-    # set current task
-    mode = "train" # select mode from 'train', 'test', 'test_real'
-    name_cloth = 't_shirt_l3'
-    checkpoint_file = '2025-03-28/14-46-38/finalbestmodel_0299_0.01162.pt'
-
-    # get address
-    PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
-
-    DATASET_DIR     = Path(f'/home/dips/Documents/datasets_lerobot/so100_test/mesh_gat/{name_cloth}')
-    import json
-    #Read the "config.yaml" generated from training the cloth model and create a config_dict
-    config_dir = DATASET_DIR / "configs"
+    # Create an instance of the MeshGATConfig class
+    mesh_gat_config = MeshGATConfig(
+        mode="train",
+        batch_size=64,
+        lr=1e-3,
+        name_cloth="t_shirt_l3",
+        distributed=True,
+    )
     
-
-    config_path = Path(config_dir / "config.yaml")
-    
-    # Parse the type argument from the command line
+    print(f"MeshGATConfig instance: {mesh_gat_config}")
+    # #Read the "config.yaml" generated from training the cloth model and create a config_dict
+    config_dir = mesh_gat_config.path_config.dataset_dir/ "configs"
+    # # Parse the type argument from the command line
     parser = argparse.ArgumentParser(description="Load configuration for cloth model.")
-    parser.add_argument("--type", type=str, default="mesh_gat", help="Type of the cloth model (e.g., mesh_gat).")
+    parser.add_argument("--cloth_model_type", type=str, default="mesh_gat", help="Type of the cloth model (e.g., mesh_gat).")
     args = parser.parse_args()
-    config = draccus.parse(
-                    PreTrainedClothModelConfig,
-                    config_path=config_path,
-                    args=[f"--type={args.type}"]  # Pass the type argument in the correct format
-                     )
-                     
 
-    print(f"Config type: {config.type}")
-    print(config)
+     #Example of slecting MeshGATConfig from the parent calss PreTrainedClothModelConfig
+    # Load the saved configuration using the from_pretrained_cloth_model method
+    pretrained_path = config_dir
+    cli_overrides = {"type": args.cloth_model_type}
+    config = PreTrainedClothModelConfig.from_pretrained_cloth_model(pretrained_path, cli_overrides=cli_overrides)
+    print(f"Loaded config: {config}")
+
 
     # Load the model
     import pickle
     from mpl_toolkits.mplot3d import Axes3D
-    template_info = pickle.load(open(config.template_dir, mode='rb'))
-    model = ClothModel(config, template_info)
-    cli_overrides_model = {"type": args.type}
+    template_info = pickle.load(open(config.path_config.template_dir, mode='rb'))
+    model = ClothMeshGATModel(config)
+    
+    cli_overrides_model = {"type": args.cloth_model_type}
     kwargs = {}
     # kwargs["cli_overrides"] = '"type": args.type'
-    model.from_pretrained_cloth_model(pretrained_path=config_dir,cli_overrides=cli_overrides_model,
+    model_obj = model.from_pretrained_cloth_model(pretrained_path=config_dir,
+                                      config=config,                                     
                                     **kwargs)
 
     # Use kwargs to pass pretrained_path
@@ -308,7 +310,7 @@ if __name__ == "__main__":
     kwargs["pretrained_path"]  = config_dir
     kwargs["config"]           = config
 
-    model = ClothModel.from_pretrained_cloth_model(**kwargs)
+    model = ClothMeshGATModel.from_pretrained_cloth_model(**kwargs)
 
     # Load the input data
     TEST_DIR = '/home/dips/Documents/datasets_lerobot/so100_test/mesh_gat/t_shirt_l3/test/real'

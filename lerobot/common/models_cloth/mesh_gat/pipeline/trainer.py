@@ -5,7 +5,7 @@ from omegaconf import OmegaConf
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from data.cloth_dataloader import get_dataloader
-from model.cloth_model import ClothModel
+from model.cloth_model import ClothMeshGATModel
 from pipeline.workspace import Workspace
 from pipeline.losses import Losses
 from utils.visualize_utils import plot_loss_curve
@@ -23,7 +23,7 @@ def trainer(cfg):
     # get training items
     template_info = pickle.load(open(cfg.template_dir, mode='rb'))
     train_loader, val_loader = get_dataloader(cfg)
-    model = ClothModel(template_info).to(device)
+    model = ClothMeshGATModel(template_info).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
     cal_loss = Losses(cfg, device, template_info).to(device)
 

@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import pickle
 from pathlib import Path
-from model.cloth_model import ClothModel
+from model.cloth_model import ClothMeshGATModel
 
 class ReshapeNormalizeImage:
     """
@@ -34,7 +34,7 @@ class API_Mesh_GAT:
 
         # load model
         self.device = device
-        self.model = ClothModel(self.template_info).to(self.device)
+        self.model = ClothMeshGATModel(self.template_info).to(self.device)
 
         #Inspect state dict loading
         self._inspect_state_dict_loading(self.model, self.checkpoint['model_state_dict'])

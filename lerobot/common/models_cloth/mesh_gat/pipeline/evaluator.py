@@ -7,7 +7,7 @@ from omegaconf import OmegaConf
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from data.cloth_dataloader import get_test_dataloader, get_test_real_dataloader
-from model.cloth_model import ClothModel
+from model.cloth_model import ClothMeshGATModel
 from pipeline.workspace import Workspace
 from pipeline.losses import Losses
 from utils.visualize_utils import plot_prediction_result_with_label, plot_prediction_result_without_true_label
@@ -17,7 +17,7 @@ def evaluator(cfg):
     device = torch.device('cuda')
     template_info = pickle.load(open(cfg.template_dir, mode='rb'))
     test_loader = get_test_dataloader(cfg)
-    model = ClothModel(template_info).to(device)
+    model = ClothMeshGATModel(template_info).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
     cal_loss = Losses(cfg, device, template_info)
     workspace = Workspace(model,opt,cal_loss, template_info,cfg, device)
@@ -73,7 +73,7 @@ def evaluator_real(cfg):
     device = torch.device('cuda')
     template_info = pickle.load(open(cfg.template_dir, mode='rb'))
     test_loader = get_test_real_dataloader(cfg)
-    model = ClothModel(template_info).to(device)
+    model = ClothMeshGATModel(template_info).to(device)
     cal_loss = Losses(cfg, device, template_info)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr)
     workspace = Workspace(model,opt,cal_loss,template_info,cfg, device)

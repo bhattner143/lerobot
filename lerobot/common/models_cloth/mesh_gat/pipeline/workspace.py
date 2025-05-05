@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from model.cloth_model import ClothModel
+from model.cloth_model import ClothMeshGATModel
 from data.cloth_dataloader import get_dataloader
 from utils.configs_utils import get_args
 from utils.visualize_utils import *

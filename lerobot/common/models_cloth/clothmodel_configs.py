@@ -26,6 +26,7 @@ class PathConfig:
     project_dir: Path
     dataset_dir: Path
     predict_dir: Path
+    config_dir: Path
     checkpoint_dir: Path
     checkpoint_file: Path
     template_dir: Path
@@ -37,6 +38,7 @@ class PathConfig:
             project_dir=Path(__file__).resolve().parent,
             dataset_dir=dataset_dir,
             predict_dir=dataset_dir / "predict",
+            config_dir=dataset_dir / "configs",
             checkpoint_dir=dataset_dir / "checkpoints",
             checkpoint_file=dataset_dir / "checkpoints" / checkpoint_file_name,
             template_dir=dataset_dir / f"configs/template_{name_cloth}.pickle",
@@ -48,7 +50,7 @@ class FeatureType(str, Enum):
 
 
 @dataclass
-class ClothModelFeature:
+class ClothMeshGATModelFeature:
     type: FeatureType
     shape: tuple
 
@@ -61,8 +63,8 @@ class PreTrainedClothModelConfig(draccus.ChoiceRegistry, abc.ABC):
     
     """Base Abstract class for pretrained cloth model configs."""
     type: str = "base"  # Add the type field with a default value
-    input_features: dict[str, ClothModelFeature]  = field(default_factory=dict)
-    output_features: dict[str, ClothModelFeature] = field(default_factory=dict)
+    input_features: dict[str, ClothMeshGATModelFeature]  = field(default_factory=dict)
+    output_features: dict[str, ClothMeshGATModelFeature] = field(default_factory=dict)
     
     device: str | None = None  # cuda | cpu | mp
 
@@ -168,13 +170,6 @@ class MeshGATConfig(PreTrainedClothModelConfig):
     mode: str = "eval"
     name_cloth: str = field(default_factory=lambda: 't_shirt_l3')
     checkpoint_file_name: str = "finalbestmodel_0299_0.01162.pt"
-    # device: str | None = None  # cuda | cpu 
-    # project_dir: str = field(default_factory=lambda: Path(PROJECT_DIR))
-    # dataset_dir: str = field(default_factory=lambda: Path(DATASET_DIR))
-    # predict_dir: str = field(default_factory=lambda: Path(PREDICT_DIR))
-    # checkpoint_dir: str = field(default_factory=lambda: Path(CHECKPOINT_DIR))
-    # checkpoint_file: str = field(default_factory=lambda: Path(CHECKPOINT_FILE))
-    # template_dir: str = field(default_factory=lambda: Path(TEMPLATE_DIR))
 
     distributed: bool = False
     # SYSTEM
@@ -269,7 +264,6 @@ if __name__ == "__main__":
         json.dump(serializable_config, f, indent=4)
 
     print(config_dir.resolve())
-    
     
     # # Parse the type argument from the command line
     parser = argparse.ArgumentParser(description="Load configuration for cloth model.")

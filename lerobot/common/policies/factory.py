@@ -132,7 +132,11 @@ def make_policy(
     cfg.output_features = {key: ft for key, ft in features.items() if ft.type is FeatureType.ACTION}
     cfg.input_features = {key: ft for key, ft in features.items() if key not in cfg.output_features}
     # Add the configuration to the arguments for policy instantiation
+    
     kwargs["config"] = cfg
+    if cfg.cloth_model_config:
+        # If a cloth model configuration is provided, add it to the arguments
+        kwargs["cloth_model_config"] = cfg.cloth_model_config
 
     if cfg.pretrained_path:
         # If a pretrained path is specified, load the pretrained policy

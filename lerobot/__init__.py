@@ -173,7 +173,8 @@ available_policies = [
     "diffusion",
     "tdmpc",
     "vqbet",
-    "act_advanced"
+    "act_advanced",
+    "act_mesh_gat",
 ]
 
 # lists all available robots from `lerobot/common/robot_devices/robots`
