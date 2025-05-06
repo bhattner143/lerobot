@@ -21,9 +21,11 @@ from torchvision.ops.misc import FrozenBatchNorm2d
 
 from lerobot.common.policies.act_mesh_gat.configuration_act_mesh_gat import ACTMeshGATConfig
 from lerobot.common.models_cloth.clothmodel_configs import*
+from lerobot.common.models_cloth.clothmodel import ReshapeNormalizeImage
 from lerobot.common.models_cloth.factory import get_cloth_model_class, make_cloth_model
 from lerobot.common.policies.normalize import Normalize, Unnormalize
 from lerobot.common.policies.pretrained import PreTrainedPolicy
+
 
 
 class ACTMeshGATPolicy(PreTrainedPolicy):
@@ -137,7 +139,22 @@ class ACTMeshGATPolicy(PreTrainedPolicy):
         if self.config.image_features:
             batch = dict(batch)  # shallow copy so that adding a key doesn't modify the original
             batch["observation.images"] = [batch[key] for key in self.config.image_features]
+        
+        import cv2
+        TEST_DIR = '/home/dips/Documents/datasets_lerobot/so100_test/mesh_gat/t_shirt_l3/test/real'
+        input_depth_image_path = Path(TEST_DIR) / '000020.depth.png'  # Example input data
+        input_depth_image = cv2.imread(str(input_depth_image_path), cv2.IMREAD_COLOR)
+\
+        #Predict the mesh
+        pred_mesh = self.cloth_model.predict(input_depth_image)
 
+        print(f"input_data shape: {input_data.shape}")
+        with torch.no_grad():
+            pred_mesh = model(input_data)
+
+
+
+        self.cloth_model.predict
         batch = self.normalize_targets(batch)
         actions_hat, (mu_hat, log_sigma_x2_hat) = self.model(batch)
 

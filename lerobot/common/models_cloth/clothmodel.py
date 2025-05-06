@@ -105,8 +105,11 @@ class PreTrainedClothModel(nn.Module, abc.ABC):
 
         else:
             raise Exception(f"Path {cloth_model_id} is not a directory")
+        if config.device is None:
+            config.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model_obj.to(config.device)
         model_obj.eval()
+        cls.model = model_obj
         return model_obj
     
 
@@ -234,6 +237,47 @@ class ClothMeshGATModel(PreTrainedClothModel):
         b, n_v, n_p = pred_mesh.shape
         
         return pred_mesh
+    
+    # @staticmethod
+    # def predict(model: nn.Module, 
+    #             input_data: np.ndarray) -> torch.Tensor:
+    #     # Resize and normalize input data
+    #     transform = ReshapeNormalizeImage()
+    #     input_data = transform(input_data)
+    #     input_data = torch.from_numpy(input_data).float().cuda()
+    #     input_data = input_data.unsqueeze(0)
+
+    #     print(f"input_data shape: {input_data.shape}")
+    #     with torch.no_grad():
+    #         pred_mesh = model(input_data)
+    #     return pred_mesh
+    def predict(self, input_data: np.ndarray) -> torch.Tensor:
+        """
+        Predicts the mesh for the given input image.
+        
+        Args:
+            input_data (np.ndarray): Input image array (H x W x C or similar).
+        
+        Returns:
+            torch.Tensor: Predicted mesh tensor of shape (1, vertex_count, 3).
+        """
+
+        # Resize and normalize input data
+        transform = ReshapeNormalizeImage()
+        input_data = transform(input_data)
+
+        # Convert to torch tensor
+        input_tensor = torch.from_numpy(input_data).float().to(self.config.device)
+        input_tensor = input_tensor.unsqueeze(0)  # Add batch dimension
+
+        print(f"Input tensor shape: {input_tensor.shape}")
+
+        # Run inference
+        self.eval()
+        with torch.no_grad():
+            pred_mesh = self.forward(input_tensor)
+
+        return pred_mesh
 
 
 import cv2
@@ -250,17 +294,7 @@ class ReshapeNormalizeImage:
         return sample
     
 
-def predict(config, model, input_data):
-        # Resize and normalize input data
-        transform = ReshapeNormalizeImage()
-        input_data = transform(input_data)
-        input_data = torch.from_numpy(input_data).float().to(config.device)
-        input_data = input_data.unsqueeze(0)
 
-        print(f"input_data shape: {input_data.shape}")
-        with torch.no_grad():
-            pred_mesh = model(input_data)
-        return pred_mesh
 
 
 # Example usage
@@ -318,7 +352,7 @@ if __name__ == "__main__":
     input_depth_image = cv2.imread(str(input_depth_image_path), cv2.IMREAD_COLOR)
     if input_depth_image is None:
         raise FileNotFoundError(f"Image not found at path: {input_depth_image_path}")
-    pred_mesh = predict(config, model, input_depth_image)
+    pred_mesh = model.predict(input_depth_image)
     print(f"Predicted mesh shape: {pred_mesh.shape}")
 
     # Plot the predicted mesh and input depth image

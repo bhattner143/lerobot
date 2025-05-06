@@ -5,6 +5,7 @@ from lerobot.common.models_cloth.clothmodel import PreTrainedClothModel
 import logging
 from termcolor import colored
 
+####IMPORT CLOTHMODEL BASED ON NAME #####
 def get_cloth_model_class(name: str) -> PreTrainedClothModel:
     """Get the policy's class and config class given a name (matching the policy class' `name` attribute)."""
     if name == "mesh_gat":
@@ -15,7 +16,7 @@ def get_cloth_model_class(name: str) -> PreTrainedClothModel:
     else:
         raise NotImplementedError(f"Policy with name {name} is not implemented.")
     
-
+###### MAKE CLOTH MODEL FROM CLOTH MODEL CONFIG ##########
 def make_cloth_model(
         config: PreTrainedClothModelConfig,      
         ) -> PreTrainedClothModel:
