@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pdb
 import pickle
+import logging
+from termcolor import colored
 
 
 from lerobot.common.models_cloth.clothmodel_configs import PreTrainedClothModelConfig, MeshGATConfig
@@ -89,7 +91,11 @@ class PreTrainedClothModel(nn.Module, abc.ABC):
             #Get the model file
             model_checkpoint_file = config.path_config.checkpoint_file
             # Load the cloth model with the specified file
-            model_checkpoint  = torch.load(model_checkpoint_file, weights_only=strict)
+            if torch.cuda.is_available():
+                model_checkpoint  = torch.load(model_checkpoint_file, weights_only=strict)
+            else:
+                logging.warning(colored("Loading model checkpoint on CPU", "red"))
+                model_checkpoint  = torch.load(model_checkpoint_file, map_location=torch.device('cpu'), weights_only=strict)
             
             # Inspect the state dict loading
             cls._inspect_model_state_dict_with_model(model_obj, model_checkpoint['model_state_dict'])
@@ -199,13 +205,24 @@ class ClothMeshGATModel(PreTrainedClothModel):
     # build template_graph with template_nodes, edge_senders, and edge_receivers
     def _build_template_graph(self):
         # init node features as template mesh positions: N (num of nodes) x 3 (positions)
-        node_features = torch.from_numpy(self.template_mesh_pos).float().cuda()
+        if torch.cuda.is_available():
+            node_features = torch.from_numpy(self.template_mesh_pos).float().cuda()
+        else:
+            logging.warning(colored("Loading node features on CPU", "red"))
+            node_features = torch.from_numpy(self.template_mesh_pos).float()
+
       
         # create two-way connectivity of edge senders and receivers
         senders = self.template_edge_idx[:, 0]
         receivers = self.template_edge_idx[:, 1]
-        sender = torch.from_numpy(np.concatenate([senders, receivers], 0)).to(torch.int64).cuda()
-        receiver = torch.from_numpy(np.concatenate([receivers, senders], 0)).to(torch.int64).cuda()
+
+        if torch.cuda.is_available():
+            sender = torch.from_numpy(np.concatenate([senders, receivers], 0)).to(torch.int64).cuda()
+            receiver = torch.from_numpy(np.concatenate([receivers, senders], 0)).to(torch.int64).cuda()
+        else:
+            logging.warning(colored("Loading senders and receivers on CPU", "red"))
+            sender = torch.from_numpy(np.concatenate([senders, receivers], 0)).to(torch.int64)
+            receiver = torch.from_numpy(np.concatenate([receivers, senders], 0)).to(torch.int64)
         
         # assign edge features as edge vertices' relative coordinate and norm: E (num of edges) x 4 (vecter + norm)
         relative_edge_vector = (torch.index_select(node_features, 0, sender) - torch.index_select(node_features, 0, receiver))

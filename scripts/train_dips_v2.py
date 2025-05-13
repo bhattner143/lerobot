@@ -127,7 +127,7 @@ def train(cfg: TrainPipelineConfig):
     """
     #################CREATE AN INSTANCE OF THE POLICY######################
     """
-    # Create the policy (policy model and mesh GAT model) based on the configuration and dataset metadata
+    # Create the policy (policy model and mesh GAT) based on the configuration and dataset metadata
     logging.info("Creating policy")
     policy = make_policy(
         cfg=cfg.policy,
@@ -172,6 +172,13 @@ def train(cfg: TrainPipelineConfig):
     # Configure the data loader for training
     if hasattr(cfg.policy, "drop_n_last_frames"):
         shuffle = False
+        """
+        Episode-aware samplers ensure that samples:
+            1. Respect episode boundaries (don’t mix frames from different episodes in a sequence batch)
+            2. Can sample full episodes or episode fragments as needed
+            3. Support options like dropping the last N frames if they are invalid (e.g., missing labels at the end of an episode)
+        """
+
         sampler = EpisodeAwareSampler(
             dataset.episode_data_index,
             drop_n_last_frames=cfg.policy.drop_n_last_frames,
@@ -205,6 +212,11 @@ def train(cfg: TrainPipelineConfig):
     }
 
     # Initialize a metrics tracker for logging and monitoring
+    """
+    Keeps running statistics of training metrics.
+    Logs these statistics for analysis and visualization (e.g., in TensorBoard, WandB, or console logs).
+    Helps monitor training progress over time, including per-batch, per-episode, or per-epoch statistics.
+    """
     train_tracker = MetricsTracker(
         cfg.batch_size, dataset.num_frames, dataset.num_episodes, train_metrics, initial_step=step
     )

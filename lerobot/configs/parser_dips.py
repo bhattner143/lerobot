@@ -102,7 +102,7 @@ def wrap(config_path: Path | None = None): ## <- accepts arguments
                         # Convert all Path objects in the configuration to strings
                         cfg_dict_without_path_obj = convert_paths_to_str(cfg_dict)
                         # Save the configuration as a JSON file
-                        save_path_json = Path(f"/home/dips/Documents/{cfg.dataset.repo_id}/meta/config_train_all.json")
+                        save_path_json = Path(f"/home/dips/Documents/{cfg.dataset.repo_id}/meta/config_train_{cfg.policy.type}_all.json")
                         # if save_path_json.exists():
                         #     raise FileExistsError(f"The file {save_path_json} already exists. Cannot overwrite.")
                         with open(save_path_json, "w") as f:

@@ -13,6 +13,7 @@ from lerobot.common.optim.schedulers import LRSchedulerConfig
 
 from lerobot.common.utils.utils import auto_select_torch_device, is_amp_available, is_torch_device_available
 from lerobot.configs.types import FeatureType, NormalizationMode, PolicyFeature
+from lerobot.common.models_cloth.clothmodel_configs import PreTrainedClothModelConfig
 
 import logging
 from termcolor import colored  # For colored terminal output.
@@ -51,6 +52,9 @@ class PreTrainedConfig(draccus.ChoiceRegistry, abc.ABC):
     # `use_amp` determines whether to use Automatic Mixed Precision (AMP) for training and evaluation. With AMP,
     # automatic gradient scaling is used.
     use_amp: bool = False
+
+    # Added for the cloth model config
+    cloth_model_config: str | PreTrainedClothModelConfig | None = None
 
     def __post_init__(self):
         self.pretrained_path = None

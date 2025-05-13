@@ -25,7 +25,7 @@ from lerobot.common.models_cloth.clothmodel import ReshapeNormalizeImage
 from lerobot.common.models_cloth.factory import get_cloth_model_class, make_cloth_model
 from lerobot.common.policies.normalize import Normalize, Unnormalize
 from lerobot.common.policies.pretrained import PreTrainedPolicy
-
+from mpl_toolkits.mplot3d import Axes3D
 
 
 class ACTMeshGATPolicy(PreTrainedPolicy):
@@ -140,21 +140,48 @@ class ACTMeshGATPolicy(PreTrainedPolicy):
             batch = dict(batch)  # shallow copy so that adding a key doesn't modify the original
             batch["observation.images"] = [batch[key] for key in self.config.image_features]
         
+        # Convert batch['observation.images.pcd_intel_real_sense'] from (1, 3, 480, 640) to (480, 640, 3) numpy array
+        img_tensor = batch['observation.images.rgb_intel_real_sense']  # shape: (1, 3, 480, 640)
+        img_np = img_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()  # shape: (480, 640, 3)
+
         import cv2
         TEST_DIR = '/home/dips/Documents/datasets_lerobot/so100_test/mesh_gat/t_shirt_l3/test/real'
         input_depth_image_path = Path(TEST_DIR) / '000020.depth.png'  # Example input data
         input_depth_image = cv2.imread(str(input_depth_image_path), cv2.IMREAD_COLOR)
-\
+
         #Predict the mesh
-        pred_mesh = self.cloth_model.predict(input_depth_image)
+        pred_mesh = self.cloth_model.predict(img_np)
+        # import matplotlib.pyplot as plt
 
-        print(f"input_data shape: {input_data.shape}")
-        with torch.no_grad():
-            pred_mesh = model(input_data)
+        # fig = plt.figure(figsize=(12, 6))
 
+        # # Plot the image on the left
+        # ax1 = fig.add_subplot(1, 2, 1)
+        # # img_np is (480, 640, 3), may be float or uint8
+        # img_show = img_np
+        # if img_show.dtype != np.uint8:
+        #     img_show = (img_show * 255).clip(0, 255).astype(np.uint8)
+        # ax1.imshow(img_show)
+        # ax1.set_title("Input Image")
+        # ax1.axis("off")
 
+        # # Plot the mesh on the right
+        # ax2 = fig.add_subplot(1, 2, 2, projection='3d')
+        # mesh_points = pred_mesh.squeeze(0) if pred_mesh.shape[0] == 1 else pred_mesh
+        # if mesh_points.shape[1] == 3:
+        #     ax2.scatter(mesh_points[:, 0], mesh_points[:, 1], mesh_points[:, 2], s=1)
+        #     ax2.set_title("Predicted Mesh")
+        # else:
+        #     print("pred_mesh does not have 3 columns, cannot plot as 3D points.")
 
-        self.cloth_model.predict
+        # plt.tight_layout()
+        # plt.show()
+
+        print(f"pred_mesh: {pred_mesh.shape}")
+        print(f"input_depth_image shape: {input_depth_image.shape}")
+        # with torch.no_grad():
+        #     pred_mesh = model(input_data)
+
         batch = self.normalize_targets(batch)
         actions_hat, (mu_hat, log_sigma_x2_hat) = self.model(batch)
 
@@ -199,6 +226,7 @@ class ACTMeshGATTemporalEnsembler:
 
         ```
         import torch
+        from mpl_toolkits.mplot3d import Axes3D
 
         seq = torch.linspace(8, 8.5, 100)
         print(seq)
